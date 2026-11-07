@@ -19,6 +19,14 @@ ud, hvad du kan bruge hver dag.
 
 ## Funktioner
 
+### 🚀 Kom hurtigt i gang
+- **Introduktion i to trin** ved første besøg: sæt dit månedsbeløb, og vælg derefter scan, manuel
+  indtastning eller eksempeldata.
+- **"Du kan bruge X kr om dagen"** står nu øverst på overblikket — det tal man reelt bruger.
+- **Hurtigt valg** af de butikker du bruger mest, når du taster en udgift manuelt.
+- **Tastaturgenveje** på computeren (`N` = ny udgift, `S` = scan, `←`/`→` = skift måned) og
+  **swipe** mellem måneder på telefonen.
+
 ### 🧾 Scan kvitteringer — uden at taste beløb
 - Tag et billede med kameraet eller slip et billede ind (jpg/png/webp).
 - Appen finder selv **totalen**, **datoen**, **butikken**, **kategorien** og **varelinjerne**.
@@ -28,6 +36,9 @@ ud, hvad du kan bruge hver dag.
 - Viser hvor sikker læsningen er, og hvilke regler der gav resultatet — så du kan stole på det.
 - Kan læse kvitteringen på to måder; hvis det første forsøg ikke finder et beløb, prøver appen
   automatisk en anden billedopdeling.
+- **Læs igen / Rotér & læs**: gik billedet galt, kan du genlæse uden at uploade forfra.
+- **Dublet-tjek**: appen advarer, hvis du er ved at gemme samme beløb fra samme butik igen.
+- **Kategorihukommelse**: retter du én gang kategorien for en butik, bruger appen den næste gang.
 - **Alt behandles lokalt**: billedet forlader aldrig enheden, og der bruges ingen API-nøgler.
 
 ### 🎯 Månedligt budget
@@ -38,10 +49,12 @@ ud, hvad du kan bruge hver dag.
 
 ### 📊 Overblik og historik
 - Stor fremdriftsring: tilbage af budgettet, procent brugt, dage tilbage.
+- **Faste udgifter** findes automatisk (husleje, streaming, medlemskaber) med månedlig total.
 - Kategori-visning med fremdriftsbjælker og advarsel, når et loft er nået.
 - "Brugt i dag", "største udgift" og "mest brugt på".
 - 6-måneders trendgraf med budgetmarkering pr. måned.
-- Fuldt søgbar historik, filtre pr. kategori, dagssummer og detaljevisning med kvitteringsbillede.
+- Fuldt søgbar historik — også **på tværs af alle måneder** — med kategorifiltre, dagssummer og
+  detaljevisning med kvitteringsbillede.
 
 ### 📱 På telefonen
 - Samme app som Android-app (APK), med kamera-scanning direkte fra lommen.
@@ -51,6 +64,7 @@ ud, hvad du kan bruge hver dag.
 ### 🔒 Dine data
 - Alt gemmes lokalt i browseren (localStorage + IndexedDB til billeder).
 - Backup og gendannelse som JSON, eksport til CSV (Excel-venlig med `;`).
+- Viser hvor meget lagerplads data bruger, og advarer før det løber op.
 - Lys/mørk tilstand, valuta (DKK/EUR/SEK/NOK) og "slet alle data".
 - Eksempeldata med ét tryk, hvis du vil se appen fyldt ud.
 
@@ -167,8 +181,9 @@ src/
 npm test
 ```
 
-26 tests dækker talformat, kvitteringsparsing (dansk, engelsk, tusindtal, manglende total,
-datoformater, kategori), budgetmatematik, månedsarv og en røgtest af hele UI'et i jsdom.
+38 tests dækker talformat, kvitteringsparsing (dansk, engelsk, tusindtal, manglende total,
+datoformater, kategori), budgetmatematik, månedsarv, faste udgifter, dubletter,
+kategorihukommelse og hele UI-flowet (onboarding, budget, manuel indtastning, historik) i jsdom.
 
 ---
 
@@ -198,5 +213,5 @@ Vil du køre appen på en undermappe, så sæt `BASE_PATH=/mit-repo/` ved build.
 
 ## Mulige næste skridt
 
-Tilbagevendende udgifter, indtægter og opsparing, flere kvitteringer ad gangen, deling via
-delingslink, og automatisk kategorisering der lærer af dine rettelser.
+Indtægter og opsparing, flere kvitteringer i kø, deling via delingslink, budgetforslag ud fra
+indkomst, og notifikationer når et kategoriloft er nået.

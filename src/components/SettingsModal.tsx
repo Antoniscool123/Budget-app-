@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { AppState, Settings } from '../types';
 import { useStore } from '../store/StoreProvider';
 import { useToast } from '../store/ToastProvider';
@@ -56,6 +56,19 @@ export function SettingsModal({ open, onClose }: { open: boolean; onClose: () =>
   const { showToast } = useToast();
   const fileRef = useRef<HTMLInputElement>(null);
   const [confirmReset, setConfirmReset] = useState(false);
+  const [storage, setStorage] = useState<{ usage: number; quota: number } | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    navigator.storage
+      ?.estimate?.()
+      .then((estimate) => setStorage({ usage: estimate.usage ?? 0, quota: estimate.quota ?? 0 }))
+      .catch(() => setStorage(null));
+  }, [open]);
+
+  const usageMb = storage ? storage.usage / 1024 / 1024 : 0;
+  const quotaMb = storage && storage.quota ? storage.quota / 1024 / 1024 : 0;
+  const usageRatio = storage && storage.quota ? storage.usage / storage.quota : 0;
 
   const exportJson = () => {
     download(
@@ -135,6 +148,32 @@ export function SettingsModal({ open, onClose }: { open: boolean; onClose: () =>
         <p className="muted tiny">
           Alt gemmes lokalt i browseren. Lav en backup, før du skifter enhed eller rydder browserdata.
         </p>
+        {storage && (
+          <div className="storage-info">
+            <div className="row-between tiny muted">
+              <span>Lagerplads brugt</span>
+              <span>
+                {usageMb < 0.1 ? 'under 0,1' : usageMb.toFixed(1)} MB
+                {quotaMb > 0 && ` af ${quotaMb.toFixed(0)} MB`}
+              </span>
+            </div>
+            {quotaMb > 0 && (
+              <div className="bar">
+                <div
+                  className={`bar-fill ${usageRatio > 0.8 ? 'over' : ''}`}
+                  style={{ width: `${Math.min(100, usageRatio * 100)}%` }}
+                />
+              </div>
+            )}
+            {usageRatio > 0.8 && (
+              <p className="hint warn">
+                <Icon name="alert" size={14} /> Pladsen er næsten brugt op. Lav en backup og slet gamle
+                kvitteringer.
+              </p>
+            )}
+          </div>
+        )}
+
         <div className="settings-buttons">
           <button type="button" className="btn btn-ghost btn-sm" onClick={exportJson}>
             <Icon name="download" size={16} /> Backup (JSON)
@@ -144,6 +183,16 @@ export function SettingsModal({ open, onClose }: { open: boolean; onClose: () =>
           </button>
           <button type="button" className="btn btn-ghost btn-sm" onClick={() => fileRef.current?.click()}>
             <Icon name="upload" size={16} /> Importér backup
+          </button>
+          <button
+            type="button"
+            className="btn btn-ghost btn-sm"
+            onClick={() => {
+              updateSettings({ onboarded: false });
+              onClose();
+            }}
+          >
+            <Icon name="sparkles" size={16} /> Vis introduktionen igen
           </button>
           <button type="button" className="btn btn-ghost btn-sm" onClick={loadDemoData}>
             <Icon name="sparkles" size={16} /> Indlæs eksempeldata
@@ -190,8 +239,11 @@ export function SettingsModal({ open, onClose }: { open: boolean; onClose: () =>
         <div>
           <strong>Kroner</strong>
           <p className="muted tiny">
-            Budget-app med kvitteringsscanning. OCR kører lokalt i browseren med Tesseract.js — dine
+            Budget-app med kvitteringsscanning. OCR kører lokalt på enheden med Tesseract.js — dine
             kvitteringer uploades aldrig.
+          </p>
+          <p className="muted tiny shortcuts">
+            <strong>Genveje:</strong> N = ny udgift · S = scan · ←/→ = skift måned · Esc = luk
           </p>
         </div>
       </div>

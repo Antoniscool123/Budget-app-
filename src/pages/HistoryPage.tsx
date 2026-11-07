@@ -24,6 +24,7 @@ export function HistoryPage({ monthKey, onMonthChange, onOpenTransaction, onScan
   const currency = state.settings.currency;
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<CategoryId | 'alle'>('alle');
+  const [searchAll, setSearchAll] = useState(false);
 
   const summary = summarizeMonth(state, monthKey);
   const months = lastMonths(6);
@@ -44,7 +45,12 @@ export function HistoryPage({ monthKey, onMonthChange, onOpenTransaction, onScan
 
   const filtered = useMemo(() => {
     const normalized = query.trim().toLowerCase();
-    return transactionsInMonth(state.transactions, monthKey).filter((txn) => {
+    const source = searchAll
+      ? [...state.transactions].sort((a, b) =>
+          a.date === b.date ? b.createdAt.localeCompare(a.createdAt) : b.date.localeCompare(a.date),
+        )
+      : transactionsInMonth(state.transactions, monthKey);
+    return source.filter((txn) => {
       if (filter !== 'alle' && txn.category !== filter) return false;
       if (!normalized) return true;
       const haystack = `${txn.merchant} ${txn.note ?? ''} ${getCategory(txn.category).name} ${
@@ -52,7 +58,7 @@ export function HistoryPage({ monthKey, onMonthChange, onOpenTransaction, onScan
       }`.toLowerCase();
       return haystack.includes(normalized);
     });
-  }, [filter, monthKey, query, state.transactions]);
+  }, [filter, monthKey, query, searchAll, state.transactions]);
 
   const grouped = useMemo(() => {
     const map = new Map<string, Transaction[]>();
@@ -92,16 +98,21 @@ export function HistoryPage({ monthKey, onMonthChange, onOpenTransaction, onScan
       <section className="card">
         <header className="card-head">
           <div>
-            <h3>Alle udgifter</h3>
+            <h3>{searchAll ? 'Alle måneder' : 'Alle udgifter'}</h3>
             <p className="muted small">
-              {summary.count} {summary.count === 1 ? 'post' : 'poster'} ·{' '}
-              {formatMoney(summary.spent, currency)} i {monthLabel(monthKey).toLowerCase()}
+              {searchAll
+                ? `${filtered.length} ${filtered.length === 1 ? 'post' : 'poster'} i alt`
+                : `${summary.count} ${summary.count === 1 ? 'post' : 'poster'} · ${formatMoney(
+                    summary.spent,
+                    currency,
+                  )} i ${monthLabel(monthKey).toLowerCase()}`}
             </p>
           </div>
         </header>
 
         <div className="history-tools">
-          <div className="search">
+          <div className="history-search-row">
+            <div className="search">
             <Icon name="search" size={17} />
             <input
               value={query}
@@ -109,11 +120,22 @@ export function HistoryPage({ monthKey, onMonthChange, onOpenTransaction, onScan
               placeholder="Søg i butik, vare eller note"
               aria-label="Søg i udgifter"
             />
-            {query && (
-              <button type="button" className="icon-btn tiny" onClick={() => setQuery('')} aria-label="Ryd søgning">
-                <Icon name="x" size={14} />
-              </button>
-            )}
+              {query && (
+                <button type="button" className="icon-btn tiny" onClick={() => setQuery('')} aria-label="Ryd søgning">
+                  <Icon name="x" size={14} />
+                </button>
+              )}
+            </div>
+            <button
+              type="button"
+              className={`filter-chip search-scope ${searchAll ? 'active' : ''}`}
+              onClick={() => setSearchAll((value) => !value)}
+              aria-pressed={searchAll}
+              aria-label="Søg i alle måneder"
+              title="Søg i alle måneder"
+            >
+              <Icon name="calendar" size={13} /> {searchAll ? 'Alle' : monthLabel(monthKey, 'short')}
+            </button>
           </div>
           <div className="filter-row">
             <button
@@ -139,7 +161,13 @@ export function HistoryPage({ monthKey, onMonthChange, onOpenTransaction, onScan
         {grouped.length === 0 ? (
           <EmptyState
             emoji={query || filter !== 'alle' ? '🔍' : '🧾'}
-            title={query || filter !== 'alle' ? 'Ingen udgifter matcher' : 'Ingen udgifter i denne måned'}
+            title={
+              query || filter !== 'alle'
+                ? 'Ingen udgifter matcher'
+                : searchAll
+                  ? 'Ingen udgifter endnu'
+                  : 'Ingen udgifter i denne måned'
+            }
             description={
               query || filter !== 'alle'
                 ? 'Prøv at søge efter noget andet, eller skift kategori.'

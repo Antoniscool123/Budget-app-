@@ -10,6 +10,7 @@ import { HistoryPage } from './pages/HistoryPage';
 import { TransactionModal } from './components/TransactionModal';
 import { TransactionDetail } from './components/TransactionDetail';
 import { SettingsModal } from './components/SettingsModal';
+import { Onboarding } from './components/Onboarding';
 import { Icon, type IconName } from './components/Icon';
 import { addMonths, currentMonthKey, isFutureMonth, monthLabel } from './lib/dates';
 import { summarizeMonth } from './lib/budget';
@@ -99,12 +100,42 @@ function Shell() {
 
   const openManual = useCallback(() => setTxnModal({ open: true, transaction: null }), []);
   const openDetail = useCallback((txn: Transaction) => setDetail(txn), []);
+  const touchStart = useRef<{ x: number; y: number } | null>(null);
 
-  const changeMonth = (delta: number) => {
-    const next = addMonths(monthKey, delta);
-    if (isFutureMonth(next)) return;
-    setMonthKey(next);
-  };
+  const changeMonth = useCallback(
+    (delta: number) => {
+      setMonthKey((current) => {
+        const next = addMonths(current, delta);
+        if (isFutureMonth(next)) return current;
+        return next;
+      });
+    },
+    [],
+  );
+
+  // Tastaturgenveje på desktop: N = ny udgift, S = scan, ←/→ = skift måned.
+  const modalOpen = txnModal.open || Boolean(detail) || settingsOpen;
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (target && /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName)) return;
+      if (event.metaKey || event.ctrlKey || event.altKey || modalOpen) return;
+
+      if (event.key === 'n' || event.key === 'N') {
+        event.preventDefault();
+        openManual();
+      } else if (event.key === 's' || event.key === 'S') {
+        event.preventDefault();
+        setTab('scan');
+      } else if (event.key === 'ArrowLeft') {
+        changeMonth(-1);
+      } else if (event.key === 'ArrowRight') {
+        changeMonth(1);
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [changeMonth, modalOpen, openManual]);
 
   return (
     <div className="app">
@@ -159,7 +190,22 @@ function Shell() {
         </div>
       </aside>
 
-      <div className="main">
+      <div
+        className="main"
+        onTouchStart={(event) => {
+          const touch = event.touches[0];
+          touchStart.current = { x: touch.clientX, y: touch.clientY };
+        }}
+        onTouchEnd={(event) => {
+          const start = touchStart.current;
+          touchStart.current = null;
+          if (!start) return;
+          const touch = event.changedTouches[0];
+          const dx = touch.clientX - start.x;
+          const dy = touch.clientY - start.y;
+          if (Math.abs(dx) > 70 && Math.abs(dx) > Math.abs(dy) * 1.8) changeMonth(dx < 0 ? 1 : -1);
+        }}
+      >
         <header className="topbar">
           <div className="topbar-title">
             <h1>{TITLES[tab].title}</h1>
@@ -252,6 +298,15 @@ function Shell() {
         }}
       />
       <SettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} />
+
+      {!state.settings.onboarded && state.transactions.length === 0 && (
+        <Onboarding
+          onFinish={(nextTab) => {
+            if (nextTab) setTab(nextTab);
+          }}
+          onManualEntry={openManual}
+        />
+      )}
     </div>
   );
 }

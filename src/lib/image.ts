@@ -106,3 +106,25 @@ export async function prepareImage(source: Blob): Promise<PreparedImage> {
     height,
   };
 }
+
+/** Roterer et billede (data-URL) — bruges når en bon er scannet på skrå. */
+export async function rotateImage(dataUrl: string, degrees = 90): Promise<string> {
+  const image = new Image();
+  image.src = dataUrl;
+  try {
+    await image.decode();
+  } catch {
+    return dataUrl;
+  }
+  const radians = (degrees * Math.PI) / 180;
+  const swapSides = Math.abs(degrees % 180) === 90;
+  const canvas = document.createElement('canvas');
+  canvas.width = swapSides ? image.height : image.width;
+  canvas.height = swapSides ? image.width : image.height;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return dataUrl;
+  ctx.translate(canvas.width / 2, canvas.height / 2);
+  ctx.rotate(radians);
+  ctx.drawImage(image, -image.width / 2, -image.height / 2);
+  return canvas.toDataURL('image/jpeg', 0.94);
+}

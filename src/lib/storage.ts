@@ -23,6 +23,7 @@ export function createInitialState(): AppState {
     version: 1,
     transactions: [],
     budgets: {},
+    merchantCategories: {},
     settings: {
       theme: 'system',
       currency: 'DKK',
@@ -43,6 +44,7 @@ export function loadState(): AppState {
       ...parsed,
       settings: { ...base.settings, ...(parsed.settings ?? {}) },
       budgets: parsed.budgets ?? {},
+      merchantCategories: parsed.merchantCategories ?? {},
       transactions: Array.isArray(parsed.transactions) ? parsed.transactions : [],
     };
   } catch (error) {
