@@ -7,41 +7,17 @@ on:
 
 permissions:
   contents: read
-  pull-requests: write
 
 jobs:
   test:
     runs-on: ubuntu-latest
-    env:
-      PR_NUMBER: ${{ github.event.pull_request.number }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
       - run: npm ci
       - run: npm run typecheck
-      - name: Tests
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          set +e
-          npm test > test.log 2>&1
-          status=$?
-          cat test.log
-          if [ $status -ne 0 ]; then
-            {
-              echo "### Testfejl i CI (Node $(node -v))"
-              echo '```'
-              tail -c 6000 test.log
-              echo '```'
-            } > ci-comment.md
-            echo "::error title=Tests fejlede::Se kommentaren paa PR'en for detaljer"
-            if [ -n "$PR_NUMBER" ]; then gh pr comment "$PR_NUMBER" --body-file ci-comment.md; fi
-            exit $status
-          fi
-        continue-on-error: false
-        # PR-nummer bruges til at skrive fejlen som kommentar
-        # (sættes nedenfor via env på job-niveau)
+      - run: npm test
       - run: npm run build
