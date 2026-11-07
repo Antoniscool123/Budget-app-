@@ -38,7 +38,8 @@ const workerUrl = () => assetBase('tesseract/worker.min.js');
 // Kernefilerne ligger bevidst i samme mappe som worker.min.js — Tesseract
 // slår sin .wasm-fil op relativt til workerens placering.
 const coreDir = () => assetBase('tesseract');
-const langUrl = () => assetBase('tessdata/dan.traineddata.gz');
+const workerDir = () => assetBase('tesseract');
+const langDir = () => assetBase('tessdata');
 
 /* ------------------------------------------------------------------ */
 /* Status og diagnostik                                                */
@@ -102,10 +103,55 @@ export interface OcrAssetCheck {
  * Tjekker at motorfilerne faktisk kan hentes. Det fanger fx en manglende
  * worker-fil i en APK, hvor Tesseract ellers bare ville vente for evigt.
  */
+export interface LangData {
+  code: string;
+  data: Uint8Array;
+  source: string;
+}
+
+/**
+ * Henter sprogmodellen i hovedtråden og giver bytes til workeren.
+ *
+ * Tesseract henter ellers selv filen inde i workeren, men nogle Android-WebViews
+ * svarer 404 på bestemte filtyper i appens assets. Ved at hente bytes her og
+ * sende dem med i stedet, er vi helt fri af den slags.
+ */
+async function fetchLangData(): Promise<LangData> {
+  const candidates = [
+    `${workerDir()}/dan.traineddata`,
+    `${workerDir()}/dan.traineddata.wasm`,
+    `${langDir()}/dan.traineddata`,
+    `${langDir()}/dan.traineddata.gz`,
+  ];
+
+  const problems: string[] = [];
+  for (const url of candidates) {
+    try {
+      const response = await fetch(url, { cache: 'force-cache' });
+      if (!response.ok) {
+        problems.push(`${url} → ${response.status}`);
+        continue;
+      }
+      const buffer = await response.arrayBuffer();
+      if (buffer.byteLength < 100_000) {
+        problems.push(`${url} → kun ${buffer.byteLength} B`);
+        continue;
+      }
+      addLog(`Sprogmodel hentet: ${url} (${buffer.byteLength} B)`);
+      return { code: 'dan', data: new Uint8Array(buffer), source: url };
+    } catch (error) {
+      problems.push(`${url} → ${error instanceof Error ? error.message : 'netværksfejl'}`);
+    }
+  }
+
+  throw new Error(`Sprogmodellen kan ikke hentes: ${problems.join(', ')}`);
+}
+
 export async function checkOcrAssets(scope: 'essential' | 'all' = 'all'): Promise<OcrAssetCheck[]> {
   const essential = [
     { name: 'worker.min.js', url: workerUrl() },
-    { name: 'dan.traineddata.gz', url: langUrl() },
+    { name: 'dan.traineddata (worker-mappe)', url: `${workerDir()}/dan.traineddata` },
+    { name: 'dan.traineddata.gz (tessdata)', url: `${langDir()}/dan.traineddata.gz` },
   ];
   const targets =
     scope === 'essential'
@@ -177,13 +223,11 @@ function attemptConfigs(): OcrAttempt[] {
   ];
 }
 
-function createOcrWorker(attempt: OcrAttempt): Promise<Worker> {
-  return createWorker('dan', 1, {
+function createOcrWorker(attempt: OcrAttempt, lang: LangData): Promise<Worker> {
+  return createWorker([{ code: lang.code, data: lang.data }], 1, {
     workerPath: workerUrl(),
     corePath: attempt.corePath,
-    langPath: assetBase('tessdata'),
     workerBlobURL: attempt.workerBlobURL,
-    gzip: true,
     cacheMethod: 'readwrite',
     logger: (message: { status?: string; progress?: number }) => {
       const stage = message.status ?? '';
@@ -228,12 +272,12 @@ async function getWorker(): Promise<Worker> {
         .join(' · '),
     );
 
-    const essential = assets.filter((asset) => asset.name === 'worker.min.js' || asset.name === 'dan.traineddata.gz');
-    const broken = essential.filter((asset) => !asset.ok);
-    if (broken.length > 0) {
-      const detail = broken.map((asset) => `${asset.name} (${asset.status ?? 'kunne ikke hentes'})`).join(', ');
-      throw new Error(`Motorfilerne kan ikke hentes i appen: ${detail}`);
+    const workerAsset = assets.find((asset) => asset.name === 'worker.min.js');
+    if (!workerAsset?.ok) {
+      throw new Error(`Worker-filen kan ikke hentes (${workerAsset?.status ?? 'netværksfejl'})`);
     }
+    const lang = await fetchLangData();
+    addLog(`Sprogmodel klar (${lang.code}) fra ${lang.source}`);
 
     setStatus('warming');
 
@@ -244,7 +288,7 @@ async function getWorker(): Promise<Worker> {
       addLog(`Opretter tekstmotor (${attempt.name})`);
       try {
         const created = await withTimeout(
-          createOcrWorker(attempt),
+          createOcrWorker(attempt, lang),
           WORKER_TIMEOUT_MS,
           `Klargøring af tekstmotoren (${attempt.name})`,
         );
