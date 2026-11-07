@@ -154,6 +154,87 @@ function sentenceCase(name: string): string {
   return cleaned;
 }
 
+/** Små ord der ikke skal have stort begyndelsesbogstav midt i et navn. */
+const SMALL_WORDS = new Set(['og', 'i', 'på', 'med', 'af', 'til', 'for', 'the', 'of', 'and', '&']);
+
+/**
+ * Pænere visning af et navn skrevet med store bogstaver:
+ * "BAGERIET KORN" → "Bageriet Korn". Bruges til butiksnavne.
+ */
+function prettyCase(name: string): string {
+  const cleaned = name.replace(/\s{2,}/g, ' ').trim();
+  if (!cleaned) return cleaned;
+  if (cleaned !== cleaned.toUpperCase()) return sentenceCase(cleaned);
+  return cleaned
+    .toLocaleLowerCase('da-DK')
+    .split(' ')
+    .map((word, index) =>
+      index > 0 && SMALL_WORDS.has(word) ? word : word.charAt(0).toLocaleUpperCase('da-DK') + word.slice(1),
+    )
+    .join(' ');
+}
+
+/** Gadenavne-ender, der afslører at en linje er en adresse. */
+const STREET_HINT =
+  /(GADE|GADEN|VEJ|VEJEN|ALLE|ALLÉ|PLADS|PLADSEN|TORV|TORVET|STRÆDE|STRAEDE|BOULEVARD|BLVD|LANDEVEJ|HOVEDGADE|RINGVEJ|MOTORVEJ|PASSAGE|ARKADE|BYCENTER|CENTER|CENTRET|GÅRD|GAARD|HAVE|HAVEN|PARK|PARKEN|MARKEN|BRYGGE|HAVN|KAJEN|KVARTER|SIDEGADE)/;
+
+/** Store byer — en linje, der bare er et bynavn, er ikke butikkens navn. */
+const CITY_NAMES = new Set([
+  'KØBENHAVN', 'KBH', 'FREDERIKSBERG', 'NØRREBRO', 'ØSTERBRO', 'VESTERBRO', 'AMAGER', 'VALBY',
+  'VANLØSE', 'BRØNSHØJ', 'AARHUS', 'ÅRHUS', 'ODENSE', 'AALBORG', 'ÅLBORG', 'ESBJERG', 'RANDERS',
+  'KOLDING', 'HORSENS', 'VEJLE', 'ROSKILDE', 'HELSINGØR', 'HILLERØD', 'SILKEBORG', 'NÆSTVED',
+  'FREDERICIA', 'VIBORG', 'KØGE', 'HOLSTEBRO', 'TASTRUP', 'GLOSTRUP', 'RØDOVRE', 'BALLERUP',
+  'HERLEV', 'HVIDOVRE', 'LYNGBY', 'GENTOFTE', 'SØBORG', 'ISLEV', 'GREVE', 'SOLRØD', 'ALBERTSLUND',
+  'BRØNDBY', 'VALLENSBÆK', 'CHARLOTTENLUND', 'DRAGØR', 'SVENDBORG', 'NYBORG', 'MIDDELFART',
+  'SLAGELSE', 'SØNDERBORG', 'AABENRAA', 'HADERSLEV', 'HERNING', 'SKIVE', 'THISTED', 'HJØRRING',
+]);
+
+/**
+ * Er linjen en adresse (gade, postnummer/by, CVR-adresse) snarere end et navn?
+ * Det er den klassiske fejl: kvitteringens øverste linje er butikkens adresse,
+ * og den må ikke blive butiksnavnet.
+ */
+function isAddressLine(line: string): boolean {
+  const upper = line.toUpperCase();
+
+  // "2200 København N" / "DK-2200 København N"
+  if (/^(DK-?)?\d{4}\s+\p{L}/u.test(upper)) return true;
+
+  // 'Adresse: Nørrebrogade 42' og lignende mærkater
+  if (/\b(ADRESSE|ADDRESS|BUTIKSADRESSE|POSTADRESSE)\b/.test(upper)) return true;
+
+  // Postnummer + by et vilkårligt sted: "..., 2300 København S"
+  if (/,\s*(DK-?)?\d{4}\s+\p{L}/u.test(upper)) return true;
+
+  // Telefonnumre: "Tlf. 33 12 34 56" / "+45 33123456"
+  if (/\b(TLF|TEL|TELEFON|MOBIL|PHONE)\b/.test(upper) && /\d{2}[\s-]?\d{2}/.test(upper)) return true;
+  if (/^\+?\d{2}[\s-]?\d{2}[\s-]?\d{2}[\s-]?\d{2}([\s-]?\d{2})?$/.test(upper.replace(/[^\d+\s-]/g, ''))) return true;
+
+  // Hjemmeside og e-mail er ikke et butiksnavn
+  if (/\b(WWW\.|HTTPS?:|@)|\.(DK|COM|NET)\b/.test(upper)) return true;
+
+  // Etageangivelse hører til adressen: "2. SAL", "ST. TV"
+  if (/\b\d\.?\s*(SAL|TV|TH|MF)\b/.test(upper)) return true;
+
+  // "Nørrebrogade 42" / "Amagerbrogade 156A" — navn + husnummer
+  const streetNumber = upper.match(/^(.+?)\s+(\d{1,4})\s*([A-Z]{1,2})?$/u);
+  if (streetNumber && STREET_HINT.test(streetNumber[1])) return true;
+
+  // Gadenavn med husnummer et vilkårligt sted i linjen
+  if (STREET_HINT.test(upper) && /\d/.test(upper)) return true;
+
+  // Hele linjen er et gadenavn uden husnummer: "Østerbrogade"
+  if (/^\p{L}{2,}(GADE|VEJ|ALLE|ALLÉ|PLADS|TORV|STRÆDE|BOULEVARD|LANDEVEJ|RINGVEJ|PASSAGE|HAVE|BRYGGE|KAJ)$/u.test(upper)) {
+    return true;
+  }
+
+  // En linje, der kun er et bynavn (evt. med retningsbogstav)
+  const words = upper.replace(/[.,]/g, '').split(/\s+/).filter(Boolean);
+  if (words.length > 0 && words.length <= 3 && CITY_NAMES.has(words[0])) return true;
+
+  return false;
+}
+
 interface TotalMatch {
   amount: number;
   index: number;
@@ -308,22 +389,52 @@ function findMerchant(lines: string[], fullText: string): { merchant?: string; b
     return { merchant: bestBrand.name, brandCategory: bestBrand.category, label: 'genkendte butikskæden' };
   }
 
-  for (const line of lines.slice(0, 8)) {
-    const cleaned = line.replace(/[*#=]/g, ' ').replace(/\s{2,}/g, ' ').trim();
-    if (cleaned.length < 3 || cleaned.length > 42) continue;
-    if (MERCHANT_NOISE.test(cleaned.toUpperCase())) continue;
-    if (!hasLetters(cleaned)) continue;
-    if (/^\d/.test(cleaned)) continue;
-    if (/^[\d\s.,:/-]+$/.test(cleaned)) continue;
-    const letters = cleaned.replace(/[^\p{L}]/gu, '');
-    if (letters.length < 3) continue;
-    return {
-      merchant: sentenceCase(cleaned),
-      label: 'brugte øverste linje som butiksnavn',
-    };
-  }
+  /**
+   * Ingen kendt kæde: find den linje på bonen, der ligner et butiksnavn mest.
+   * Adresser, bynavne, telefonnumre og bon-blah-blah frasorteres, og ellers
+   * foretrækkes korte linjer med store bogstaver højt oppe på bonen.
+   */
+  const candidates: Array<{ name: string; score: number }> = [];
 
-  return {};
+  lines.slice(0, 10).forEach((line, index) => {
+    const cleaned = line.replace(/[*#=_~]+/g, ' ').replace(/\s{2,}/g, ' ').trim();
+    if (cleaned.length < 2 || cleaned.length > 42) return;
+    const upperLine = cleaned.toUpperCase();
+    if (MERCHANT_NOISE.test(upperLine)) return;
+    if (!hasLetters(cleaned)) return;
+    if (/^\d/.test(cleaned)) return;
+    if (/^[\d\s.,:/-]+$/.test(cleaned)) return;
+    // Varelinjer slutter med en pris — de er ikke butikkens navn
+    if (/[-+]?\d{1,3}(?:[.\s]\d{3})*[.,]\d{2}\s*$/.test(cleaned)) return;
+    if (isAddressLine(cleaned)) return;
+
+    const letters = cleaned.replace(/[^\p{L}]/gu, '');
+    if (letters.length < 3) return;
+
+    const words = cleaned.split(/\s+/).filter(Boolean);
+    const isUpper = cleaned === upperLine && /[A-ZÆØÅ]/.test(cleaned);
+
+    let score = Math.max(0, 30 - index * 6);
+    if (isUpper) score += 14;
+    if (/\d/.test(cleaned)) score -= 16;
+    if (words.length === 1) score += 10;
+    else if (words.length === 2) score += 8;
+    else if (words.length === 3) score += 4;
+    else if (words.length > 4) score -= 10;
+    if (/\b(A\/?S|APS|IVS|K\/S)\b/.test(upperLine)) score -= 6;
+    if (/[:;,]/.test(cleaned)) score -= 6;
+    if (letters.length < 5) score -= 4;
+
+    // En kendt kæde et vilkårligt sted på bonen vejer tungt.
+    if (BRANDS.some((brand) => brand.pattern.test(upperLine))) score += 25;
+
+    candidates.push({ name: prettyCase(cleaned), score });
+  });
+
+  if (candidates.length === 0) return {};
+  candidates.sort((a, b) => b.score - a.score);
+  if (candidates[0].score <= 0) return {};
+  return { merchant: candidates[0].name, label: 'gættede butiksnavnet ud fra bonen' };
 }
 
 function findItems(lines: string[], totalIndex: number | null): ReceiptItem[] {
@@ -359,8 +470,32 @@ function findItems(lines: string[], totalIndex: number | null): ReceiptItem[] {
   return items.slice(0, 40);
 }
 
-function guessCategory(text: string, brandCategory?: CategoryId): { category: CategoryId; label: string } {
+/** Butikstypen i navnet siger ofte mere end varelinjerne: en bager er ikke "andet". */
+const MERCHANT_TYPES: Array<{ pattern: RegExp; category: CategoryId }> = [
+  { pattern: /\b(APOTEK|MATAS)\b/, category: 'sundhed' },
+  { pattern: /\b(TANK|BENZIN|Q8|CIRCLE\s*K|SHELL|OK\b|GO\s?ON)\b/, category: 'transport' },
+  { pattern: /\b(RESTAURANT|PIZZERIA|PIZZA|GRILL|SUSHI|BURGER|CAFE|CAFÉ|KAFFEBAR|KRO)\b/, category: 'restaurant' },
+  { pattern: /\b(BAGER|BAGERI|KONDITORI|BRYGGERI)\b/, category: 'dagligvarer' },
+  { pattern: /\b(KIOSK|KIOSken|SUPERMARKED|MINIMARKED|MARKED|DELI|OSTE|FISK|SLAGTER|GRØNT|ISKIOSK)\b/i, category: 'dagligvarer' },
+  { pattern: /\b(FRISØR|SALON|BARBER)\b/, category: 'shopping' },
+];
+
+function merchantTypeCategory(merchant: string | undefined): { category: CategoryId; label: string } | null {
+  if (!merchant) return null;
+  const upper = merchant.toUpperCase();
+  for (const type of MERCHANT_TYPES) {
+    if (type.pattern.test(upper)) {
+      return { category: type.category, label: 'kategori ud fra butikkens type' };
+    }
+  }
+  return null;
+}
+
+function guessCategory(text: string, brandCategory?: CategoryId, merchant?: string): { category: CategoryId; label: string } {
   if (brandCategory) return { category: brandCategory, label: 'kategori fra butikskæden' };
+
+  const byType = merchantTypeCategory(merchant);
+  if (byType) return byType;
 
   const haystack = text.toLocaleLowerCase('da-DK');
   let best: { category: CategoryId; hits: number } | null = null;
@@ -490,7 +625,11 @@ export function parseReceipt(rawText: string): ParsedReceipt {
 
   // 5) Kategori
   const itemText = items.map((item) => item.name).join(' ');
-  const { category, label } = guessCategory(`${merchantResult.merchant ?? ''} ${itemText} ${text.slice(0, 400)}`, merchantResult.brandCategory);
+  const { category, label } = guessCategory(
+    `${merchantResult.merchant ?? ''} ${itemText} ${text.slice(0, 400)}`,
+    merchantResult.brandCategory,
+    merchantResult.merchant,
+  );
   signals.push(label);
 
   // 6) Varer

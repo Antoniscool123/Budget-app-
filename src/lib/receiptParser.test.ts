@@ -82,6 +82,94 @@ describe('parseReceipt', () => {
     expect(result.items.some((item) => /rabat|moms|kontant|bytte/i.test(item.name))).toBe(false);
   });
 
+  it('tager butiksnavnet — ikke adressen — når adressen står øverst', () => {
+    const result = parseReceipt(`
+Nørrebrogade 42
+2200 København N
+BAGERIET KORN
+CVR 30123456
+DATO 06-11-2026  KL. 09:12
+RUGBRØD              28,00
+KAFFEBØNNER 500G     65,00
+I ALT                93,00
+`);
+    expect(result.amount).toBe(93);
+    expect(result.merchant).toBe('Bageriet Korn');
+    expect(result.date).toBe('2026-11-06');
+  });
+
+  it('springer adresse, telefonnummer og bon-ord over i jagten på butiksnavnet', () => {
+    const result = parseReceipt(`
+Amagerbrogade 156A
+2300 København S
+Tlf. 33 12 34 56
+KASSERBON
+KØBENHAVN
+DEN LILLE KIOSK
+SODAVAND            15,00
+CHIPS               22,50
+I ALT               37,50
+`);
+    expect(result.merchant).toBe('Den Lille Kiosk');
+    expect(result.amount).toBe(37.5);
+  });
+
+  it('giver ikke adressen som butiksnavn, hvis der ikke er noget navn på bonen', () => {
+    const result = parseReceipt(`
+Nørrebrogade 42
+2200 København N
+DATO 06-11-2026
+BRØD                28,00
+I ALT               28,00
+`);
+    expect(result.merchant).toBeUndefined();
+    expect(result.amount).toBe(28);
+  });
+
+  it('springer adresse med komma, postnummer og by over', () => {
+    const result = parseReceipt(`
+Adresse: Amagerbrogade 156A, 2300 København S
+www.denlillekiosk.dk
+DEN LILLE KIOSK
+DATO 06-11-2026
+SODAVAND           15,00
+I ALT              15,00
+`.trim().replace(/^\+/gm, ''));
+    expect(result.merchant).toBe('Den Lille Kiosk');
+  });
+
+  it('tager ikke et telefonnummer eller en hjemmeside som butik', () => {
+    const result = parseReceipt(`
+Tlf. 33 12 34 56
+www.bageriet.dk
+BAGERIET KORN
+RUGBRØD             28,00
+I ALT               28,00
+`.trim().replace(/^\+/gm, ''));
+    expect(result.merchant).toBe('Bageriet Korn');
+  });
+
+  it('giver ikke et bynavn som butiksnavn', () => {
+    const result = parseReceipt(`
+KØBENHAVN
+DATO 06-11-2026
+AVIS                20,00
+I ALT               20,00
+`.trim().replace(/^\+/gm, ''));
+    expect(result.merchant).toBeUndefined();
+  });
+
+  it('beholder navnet når butikken står øverst og adressen lige under', () => {
+    const result = parseReceipt(`
+DEN LILLE KIOSK
+Amagerbrogade 156A, 2300 København S
+DATO 06-11-2026
+SODAVAND           15,00
+I ALT              15,00
+`);
+    expect(result.merchant).toBe('Den Lille Kiosk');
+  });
+
   it('bruger "at betale" og gætter kategori ud fra butikken', () => {
     const result = parseReceipt(APOTEK_RECEIPT);
     expect(result.amount).toBe(184.45);
