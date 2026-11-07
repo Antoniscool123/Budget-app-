@@ -170,7 +170,8 @@ datoformater, kategori), budgetmatematik, månedsarv og en røgtest af hele UI'e
 
 **GitHub Pages** (workflowet `.github/workflows/deploy.yml` er klar):
 1. Gå til **Settings → Pages** og vælg **GitHub Actions** som kilde.
-2. Push til `main` — appen bygges med den rigtige base-sti og deployes.
+2. Start workflowet **Deploy til GitHub Pages** fra Actions-fanen — appen bygges med den rigtige
+   base-sti og deployes til `https://<bruger>.github.io/<repo>/`.
 
 **Vercel / Netlify:** importér repoet, build-kommando `npm run build`, output-mappe `dist`.
 Ingen miljøvariabler eller server kræves.

@@ -1,8 +1,8 @@
 name: Deploy til GitHub Pages
 
+# Kør manuelt: slå først Pages til under Settings → Pages → Source: "GitHub Actions",
+# og start derefter workflowet fra Actions-fanen.
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
 
 permissions:
