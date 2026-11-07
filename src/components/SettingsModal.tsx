@@ -66,6 +66,20 @@ export function SettingsModal({ open, onClose }: { open: boolean; onClose: () =>
       .catch(() => setStorage(null));
   }, [open]);
 
+  const lastBackup = state.settings.lastBackupAt;
+  const backupDays = lastBackup
+    ? Math.round((Date.now() - new Date(lastBackup).getTime()) / (24 * 60 * 60 * 1000))
+    : undefined;
+  const backupLabel =
+    backupDays === undefined
+      ? 'Ingen backup endnu'
+      : backupDays <= 0
+        ? 'Sidste backup: i dag'
+        : backupDays === 1
+          ? 'Sidste backup: i går'
+          : `Sidste backup: for ${backupDays} dage siden`;
+  const backupStale = backupDays === undefined || backupDays >= 30;
+
   const usageMb = storage ? storage.usage / 1024 / 1024 : 0;
   const quotaMb = storage && storage.quota ? storage.quota / 1024 / 1024 : 0;
   const usageRatio = storage && storage.quota ? storage.usage / storage.quota : 0;
@@ -76,6 +90,7 @@ export function SettingsModal({ open, onClose }: { open: boolean; onClose: () =>
       JSON.stringify(state, null, 2),
       'application/json',
     );
+    updateSettings({ lastBackupAt: new Date().toISOString() });
     showToast('Backup hentet som JSON');
   };
 
@@ -173,6 +188,17 @@ export function SettingsModal({ open, onClose }: { open: boolean; onClose: () =>
             )}
           </div>
         )}
+
+        <div className={`backup-status ${backupStale ? 'stale' : ''}`}>
+          <Icon name={backupStale ? 'alert' : 'check'} size={16} />
+          <div>
+            <strong>{backupLabel}</strong>
+            <span className="muted tiny">
+              {state.transactions.length} udgifter · {state.transactions.filter((txn) => txn.source === 'scan').length}{' '}
+              scannede boner
+            </span>
+          </div>
+        </div>
 
         <div className="settings-buttons">
           <button type="button" className="btn btn-ghost btn-sm" onClick={exportJson}>

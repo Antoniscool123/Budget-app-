@@ -1,10 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { CategoryId, Transaction } from '../types';
 import { CATEGORIES } from '../data/categories';
 import { useStore } from '../store/StoreProvider';
 import { useToast } from '../store/ToastProvider';
 import { formatMoney, parseAmountString } from '../lib/format';
-import { todayISO } from '../lib/dates';
+import { addDaysISO, todayISO } from '../lib/dates';
 import { topMerchants } from '../lib/merchants';
 import { findDuplicate } from '../lib/duplicates';
 import { formatRelativeDay } from '../lib/format';
@@ -26,11 +26,11 @@ interface FormState {
   items: Transaction['items'];
 }
 
-const emptyForm = (): FormState => ({
+const emptyForm = (category: CategoryId = 'dagligvarer'): FormState => ({
   amount: '',
   merchant: '',
   date: todayISO(),
-  category: 'dagligvarer',
+  category,
   note: '',
   items: [],
 });
@@ -43,6 +43,13 @@ export function TransactionModal({ open, transaction, onClose }: TransactionModa
   const [duplicate, setDuplicate] = useState<Transaction | null>(null);
   const isEdit = Boolean(transaction);
   const suggestions = transaction ? [] : topMerchants(state.transactions, 6);
+  const amountRef = useRef<HTMLInputElement>(null);
+
+  // Den kategori man brugte sidst, er ofte den rigtige igen.
+  const lastCategory = useMemo<CategoryId>(() => {
+    const newest = [...state.transactions].sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
+    return newest?.category ?? 'dagligvarer';
+  }, [state.transactions]);
 
   useEffect(() => {
     if (!open) return;
@@ -57,14 +64,14 @@ export function TransactionModal({ open, transaction, onClose }: TransactionModa
         items: transaction.items,
       });
     } else {
-      setForm(emptyForm());
+      setForm(emptyForm(lastCategory));
     }
-  }, [open, transaction]);
+  }, [lastCategory, open, transaction]);
 
   const update = <K extends keyof FormState>(key: K, value: FormState[K]) =>
     setForm((prev) => ({ ...prev, [key]: value }));
 
-  const submit = async (force = false) => {
+  const submit = async (force = false, keepOpen = false) => {
     const amount = parseAmountString(form.amount);
     if (!amount || amount <= 0) {
       showToast('Indtast et beløb større end 0', { tone: 'error' });
@@ -105,7 +112,14 @@ export function TransactionModal({ open, transaction, onClose }: TransactionModa
       showToast(`${formatMoney(payload.amount, currency)} fra ${payload.merchant} gemt`);
     }
     rememberMerchantCategory(payload.merchant, payload.category);
-    onClose();
+
+    if (keepOpen) {
+      setForm({ ...emptyForm(payload.category), date: payload.date });
+      setDuplicate(null);
+      window.setTimeout(() => amountRef.current?.focus(), 30);
+    } else {
+      onClose();
+    }
   };
 
   const remove = async () => {
@@ -151,6 +165,16 @@ export function TransactionModal({ open, transaction, onClose }: TransactionModa
             <button type="button" className="btn btn-ghost" onClick={onClose}>
               Annullér
             </button>
+            {!isEdit && (
+              <button
+                type="button"
+                className="btn btn-ghost btn-sm"
+                onClick={() => submit(false, true)}
+                title="Gem og tilføj endnu en udgift"
+              >
+                <Icon name="plus" size={16} /> Gem & ny
+              </button>
+            )}
             <button type="button" className="btn btn-primary" onClick={() => submit()}>
               <Icon name="check" size={17} /> {isEdit ? 'Gem ændringer' : 'Gem udgift'}
             </button>
@@ -163,6 +187,7 @@ export function TransactionModal({ open, transaction, onClose }: TransactionModa
         <div className="amount-input">
           <span className="currency">kr</span>
           <input
+            ref={amountRef}
             inputMode="decimal"
             value={form.amount}
             placeholder="0,00"
@@ -202,10 +227,30 @@ export function TransactionModal({ open, transaction, onClose }: TransactionModa
             onChange={(event) => update('merchant', event.target.value)}
           />
         </label>
-        <label className="field">
+        <div className="field">
           <span>Dato</span>
-          <input type="date" value={form.date} onChange={(event) => update('date', event.target.value)} />
-        </label>
+          <input
+            type="date"
+            value={form.date}
+            aria-label="Dato"
+            onChange={(event) => update('date', event.target.value)}
+          />
+          <div className="date-chips">
+            {[
+              { label: 'I dag', value: todayISO() },
+              { label: 'I går', value: addDaysISO(todayISO(), -1) },
+            ].map((option) => (
+              <button
+                key={option.value}
+                type="button"
+                className={`filter-chip ${form.date === option.value ? 'active' : ''}`}
+                onClick={() => update('date', option.value)}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+        </div>
       </div>
 
       <div className="field">

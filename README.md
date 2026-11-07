@@ -28,11 +28,18 @@ ud, hvad du kan bruge hver dag.
   scan-knap, så tommelen når alt.
 - Mørk tilstand er **helt sort** med løftede kort — som på One UI. Nyt app-ikon i samme blå farve.
 
+### 💡 Indsigter, der hjælper dig videre
+- Kortet **"Værd at vide"** på overblikket fremhæver det vigtigste lige nu: er du foran planen,
+  bruger du mere end sidste måned, er en kategori steget, fylder faste udgifter meget — eller er
+  det tid til en backup. Hvert punkt har et direkte genvej til det sted, hvor du kan handle.
+
 ### 🚀 Kom hurtigt i gang
 - **Introduktion i to trin** ved første besøg: sæt dit månedsbeløb, og vælg derefter scan, manuel
   indtastning eller eksempeldata.
 - **"Du kan bruge X kr om dagen"** står nu øverst på overblikket — det tal man reelt bruger.
-- **Hurtigt valg** af de butikker du bruger mest, når du taster en udgift manuelt.
+- **Hurtigt valg** af de butikker du bruger mest, når du taster en udgift manuelt, og
+  **"Gem & ny"**, så du kan taste flere udgifter i træk uden at åbne vinduet igen.
+- **Dato med ét tryk**: "I dag" eller "I går" i stedet for datovælger.
 - **Tastaturgenveje** på computeren (`N` = ny udgift, `S` = scan, `←`/`→` = skift måned) og
   **swipe** mellem måneder på telefonen.
 
@@ -48,6 +55,9 @@ ud, hvad du kan bruge hver dag.
 - **Læs igen / Rotér & læs**: gik billedet galt, kan du genlæse uden at uploade forfra.
 - **Dublet-tjek**: appen advarer, hvis du er ved at gemme samme beløb fra samme butik igen.
 - **Kategorihukommelse**: retter du én gang kategorien for en butik, bruger appen den næste gang.
+- **Flere boner på én gang**: vælg eller slip flere billeder, og appen læser dem én ad gangen
+  ("Bon 2 af 3"), så du slipper for at starte forfra hver gang.
+- Fandt OCR'en intet beløb, står markøren klar i beløbsfeltet.
 - **Alt behandles lokalt**: billedet forlader aldrig enheden, og der bruges ingen API-nøgler.
 
 ### 🎯 Månedligt budget
@@ -65,6 +75,11 @@ ud, hvad du kan bruge hver dag.
 - Fuldt søgbar historik — også **på tværs af alle måneder** — med kategorifiltre, dagssummer og
   detaljevisning med kvitteringsbillede.
 
+### ♿ Tilgængelighed
+- "Spring til indhold"-link, fokus-fælde i vinduer, synlig fokusmarkering og skærmlæser-opdatering
+  når du skifter måned.
+- Store trykflader (mindst 40 px) og respekt for `prefers-reduced-motion`.
+
 ### 📱 På telefonen
 - Samme app som Android-app (APK), med kamera-scanning direkte fra lommen.
 - Kvitteringsmotoren og sprogmodellen ligger i APK'en, så scanningen virker offline.
@@ -74,6 +89,7 @@ ud, hvad du kan bruge hver dag.
 - Alt gemmes lokalt i browseren (localStorage + IndexedDB til billeder).
 - Backup og gendannelse som JSON, eksport til CSV (Excel-venlig med `;`).
 - Viser hvor meget lagerplads data bruger, og advarer før det løber op.
+- **Backup-status** med dato, så du ved, hvornår data sidst blev sikret.
 - Lys/mørk tilstand, valuta (DKK/EUR/SEK/NOK) og "slet alle data".
 - Eksempeldata med ét tryk, hvis du vil se appen fyldt ud.
 
@@ -190,9 +206,10 @@ src/
 npm test
 ```
 
-38 tests dækker talformat, kvitteringsparsing (dansk, engelsk, tusindtal, manglende total,
+47 tests dækker talformat, kvitteringsparsing (dansk, engelsk, tusindtal, manglende total,
 datoformater, kategori), budgetmatematik, månedsarv, faste udgifter, dubletter,
-kategorihukommelse og hele UI-flowet (onboarding, budget, manuel indtastning, historik) i jsdom.
+kategorihukommelse, indsigter og hele UI-flowet (onboarding, budget, manuel indtastning, "Gem & ny",
+dato-hurtigvalg, indstillinger, historik) i jsdom.
 
 ---
 

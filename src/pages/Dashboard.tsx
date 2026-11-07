@@ -2,6 +2,7 @@ import type { Tab, Transaction } from '../types';
 import { useStore } from '../store/StoreProvider';
 import { summarizeMonth, transactionsInMonth } from '../lib/budget';
 import { detectRecurring, monthlyTotal } from '../lib/recurring';
+import { buildInsights } from '../lib/insights';
 import { convertAmount, formatMoney, formatNumber, formatPercent, formatRelativeDay } from '../lib/format';
 import { currentMonthKey, monthLabel, monthProgress, todayISO } from '../lib/dates';
 import { CategoryAvatar } from '../components/ui/CategoryChip';
@@ -14,9 +15,16 @@ interface DashboardProps {
   onNavigate: (tab: Tab) => void;
   onOpenTransaction: (txn: Transaction) => void;
   onOpenBudget: () => void;
+  onOpenSettings: () => void;
 }
 
-export function Dashboard({ monthKey, onNavigate, onOpenTransaction, onOpenBudget }: DashboardProps) {
+export function Dashboard({
+  monthKey,
+  onNavigate,
+  onOpenTransaction,
+  onOpenBudget,
+  onOpenSettings,
+}: DashboardProps) {
   const { state, loadDemoData } = useStore();
   const currency = state.settings.currency;
   const summary = summarizeMonth(state, monthKey);
@@ -37,6 +45,7 @@ export function Dashboard({ monthKey, onNavigate, onOpenTransaction, onOpenBudge
   const recent = transactionsInMonth(state.transactions, monthKey).slice(0, 6);
   const recurring = hasAnyData ? detectRecurring(state.transactions, monthKey) : [];
   const recurringTotal = monthlyTotal(recurring);
+  const insights = hasAnyData ? buildInsights(state, monthKey) : [];
 
   const paceText = (() => {
     if (!budgetSet) return 'Sæt dit månedlige beløb for at få et overblik over, hvor meget du kan bruge.';
@@ -180,6 +189,39 @@ export function Dashboard({ monthKey, onNavigate, onOpenTransaction, onOpenBudge
           </span>
         </div>
       </section>
+
+      {insights.length > 0 && (
+        <section className="card">
+          <header className="card-head">
+            <h3>Værd at vide</h3>
+          </header>
+          <ul className="insights">
+            {insights.map((insight) => (
+              <li key={insight.id} className={`insight insight-${insight.tone}`}>
+                <span className="insight-icon" aria-hidden="true">
+                  <Icon name={insight.icon} size={17} />
+                </span>
+                <div className="insight-copy">
+                  <strong>{insight.title}</strong>
+                  <p className="muted tiny">{insight.detail}</p>
+                </div>
+                {insight.action && (
+                  <button
+                    type="button"
+                    className="link-btn"
+                    onClick={() => {
+                      if (insight.action?.settings) onOpenSettings();
+                      else if (insight.action?.tab) onNavigate(insight.action.tab);
+                    }}
+                  >
+                    {insight.action.label}
+                  </button>
+                )}
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       {recurring.length >= 2 && (
         <section className="card">
