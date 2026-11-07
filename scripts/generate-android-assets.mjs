@@ -132,16 +132,6 @@ async function main() {
 `,
   );
 
-  // Adaptivt ikon-baggrund i mørk brandfarve.
-  writeFileSync(
-    join(res, 'values/ic_launcher_background.xml'),
-    `<?xml version="1.0" encoding="utf-8"?>
-<resources>
-    <color name="ic_launcher_background">${brand}</color>
-</resources>
-`,
-  );
-
   console.log('✓ Android-ikoner og splash genereret');
 }
 
