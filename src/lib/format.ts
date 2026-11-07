@@ -11,8 +11,13 @@ const CURRENCY_STEPS: Record<Settings['currency'], number> = {
  * Beløb gemmes altid i kroner. Ved visning omregnes de til den valuta
  * brugeren har valgt i indstillingerne.
  */
+/** Omregner et kronebeløb til den valuta brugeren har valgt. */
+export function convertAmount(amount: number, currency: Settings['currency'] = 'DKK'): number {
+  return amount / CURRENCY_STEPS[currency];
+}
+
 export function formatMoney(amount: number, currency: Settings['currency'] = 'DKK', opts: { compact?: boolean } = {}): string {
-  const value = amount / CURRENCY_STEPS[currency];
+  const value = convertAmount(amount, currency);
   const formatter = new Intl.NumberFormat('da-DK', {
     style: 'currency',
     currency,

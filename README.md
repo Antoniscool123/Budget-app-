@@ -5,7 +5,8 @@ Ingen manuel indtastning, ingen server, ingen konto. Sæt dit månedlige beløb,
 ud, hvad du kan bruge hver dag.
 
 > Bygget med React + TypeScript + Vite og pakket til Android med Capacitor. OCR kører 100 % lokalt
-> på enheden med Tesseract.js — dine kvitteringer uploades aldrig.
+> på enheden med Tesseract.js — dine kvitteringer uploades aldrig. Designet er minimalistisk og
+> trækker på One UI 9's formsprog.
 
 📱 **[Download Android-appen (APK)](https://github.com/Antoniscool123/Budget-app-/releases/download/apk/kroner.apk)** — virker uden netværk og uden konto.
 
@@ -18,6 +19,14 @@ ud, hvad du kan bruge hver dag.
 ---
 
 ## Funktioner
+
+### 🎨 Minimalistisk design, bygget til One UI 9
+- Rolig, flad flade med **store bløde kort (28–30 px)**, rigelig luft og **én blå accentfarve**
+  — ingen gradienter, glød eller dekorative rammer.
+- **Runde "pill"-knapper**, segmenterede vælgere og diskrete chips i stedet for tunge formularer.
+- På telefonen: **bundnavigation**, **bottom sheets** med håndtag i stedet for modaler, og en rund
+  scan-knap, så tommelen når alt.
+- Mørk tilstand er **helt sort** med løftede kort — som på One UI. Nyt app-ikon i samme blå farve.
 
 ### 🚀 Kom hurtigt i gang
 - **Introduktion i to trin** ved første besøg: sæt dit månedsbeløb, og vælg derefter scan, manuel
@@ -48,7 +57,7 @@ ud, hvad du kan bruge hver dag.
 - Se hvor meget du kan bruge pr. dag resten af måneden, og om du er foran eller bagud planen.
 
 ### 📊 Overblik og historik
-- Stor fremdriftsring: tilbage af budgettet, procent brugt, dage tilbage.
+- Stort tal for det du har tilbage, tynd fremdriftslinje og procent brugt.
 - **Faste udgifter** findes automatisk (husleje, streaming, medlemskaber) med månedlig total.
 - Kategori-visning med fremdriftsbjælker og advarsel, når et loft er nået.
 - "Brugt i dag", "største udgift" og "mest brugt på".

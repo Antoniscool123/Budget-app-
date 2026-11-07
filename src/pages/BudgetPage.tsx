@@ -259,18 +259,6 @@ export function BudgetPage({ monthKey }: { monthKey: string }) {
         </ul>
       </section>
 
-      <section className="card tip-card">
-        <span className="mini-icon teal">
-          <Icon name="sparkles" size={18} />
-        </span>
-        <div>
-          <h3>Et godt udgangspunkt</h3>
-          <p className="muted small">
-            Mange danskere bruger omkring 30 % af deres rådighedsbeløb på dagligvarer, 25 % på bolig og
-            10 % på transport. Tryk <strong>Fordel automatisk</strong> for at få et forslag, du kan justere.
-          </p>
-        </div>
-      </section>
     </div>
   );
 }
