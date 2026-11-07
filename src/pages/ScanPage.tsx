@@ -3,10 +3,16 @@ import type { CategoryId, ParsedReceipt, ReceiptItem } from '../types';
 import { CATEGORIES, getCategory } from '../data/categories';
 import { cropImage, prepareImage, rotateImage } from '../lib/image';
 import {
+  checkOcrAssets,
+  getOcrError,
+  getOcrLog,
   getOcrStatus,
   prewarmOcr,
+  resetOcrEngine,
   runOcr,
   subscribeOcrStatus,
+  type OcrAssetCheck,
+  type OcrLogEntry,
   type OcrProgress,
   type OcrStatus,
 } from '../lib/ocr';
@@ -73,6 +79,8 @@ export function ScanPage({ onManualEntry }: { onManualEntry: () => void }) {
 
   const [engineStatus, setEngineStatus] = useState<OcrStatus>(getOcrStatus());
   const [elapsed, setElapsed] = useState(0);
+  const [showDiagnostics, setShowDiagnostics] = useState(false);
+  const [diagnostics, setDiagnostics] = useState<{ log: OcrLogEntry[]; assets: OcrAssetCheck[] } | null>(null);
 
   const cameraRef = useRef<HTMLInputElement>(null);
   const uploadRef = useRef<HTMLInputElement>(null);
@@ -200,11 +208,13 @@ export function ScanPage({ onManualEntry }: { onManualEntry: () => void }) {
         }
       } catch (scanError) {
         console.error(scanError);
-        const message =
-          scanError instanceof Error && scanError.message.includes('Canvas')
-            ? 'Din browser understøtter ikke billedbehandling. Prøv en anden browser.'
-            : 'Tekstgenkendelsen fejlede. Prøv igen med et skarpere billede — eller indtast beløbet manuelt.';
+        const raw = scanError instanceof Error ? scanError.message : '';
+        const message = raw.includes('Canvas')
+          ? 'Din browser understøtter ikke billedbehandling. Prøv en anden browser.'
+          : raw || getOcrError() || 'Tekstgenkendelsen fejlede. Prøv igen med et skarpere billede.';
         setError(message);
+        setShowDiagnostics(false);
+        setDiagnostics(null);
         setPhase('error');
       }
     },
@@ -393,8 +403,12 @@ export function ScanPage({ onManualEntry }: { onManualEntry: () => void }) {
               <p className={`engine-status ${engineStatus}`}>
                 <span className="engine-dot" aria-hidden="true" />
                 {engineStatus === 'error'
-                  ? 'Scanneren kunne ikke klargøres — du kan indtaste udgiften manuelt'
-                  : 'Klargør scanneren i baggrunden — kun første gang'}
+                  ? getOcrError() || 'Scanneren kunne ikke klargøres — indtast udgiften manuelt'
+                  : engineStatus === 'checking'
+                    ? 'Tjekker scannerens filer'
+                    : engineStatus === 'warming'
+                      ? 'Klargør scanneren — kun første gang'
+                      : 'Scanneren starter ved første brug'}
               </p>
             )}
           </section>
@@ -553,14 +567,90 @@ export function ScanPage({ onManualEntry }: { onManualEntry: () => void }) {
           </span>
           <h2>Scanningen lykkedes ikke</h2>
           <p className="muted">{error}</p>
+          <p className="muted tiny">
+            Du kan altid gemme udgiften med det samme — tryk «Indtast manuelt» og skriv beløbet fra bonen.
+          </p>
           <div className="row-wrap">
-            <button type="button" className="btn btn-primary" onClick={reset}>
-              Prøv igen
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={async () => {
+                await resetOcrEngine();
+                reset();
+              }}
+            >
+              Genstart scanneren
             </button>
             <button type="button" className="btn btn-ghost" onClick={onManualEntry}>
               Indtast manuelt
             </button>
+            <button
+              type="button"
+              className="link-btn"
+              onClick={async () => {
+                const next = !showDiagnostics;
+                setShowDiagnostics(next);
+                if (next && !diagnostics) {
+                  setDiagnostics({ log: getOcrLog(), assets: await checkOcrAssets('all') });
+                }
+              }}
+            >
+              {showDiagnostics ? 'Skjul detaljer' : 'Vis detaljer'}
+            </button>
+            {showDiagnostics && (
+              <button
+                type="button"
+                className="link-btn"
+                onClick={async () => {
+                  const text = [
+                    `Fejl: ${error}`,
+                    `Tid: ${new Date().toISOString()}`,
+                    `Status: ${getOcrStatus()}`,
+                    '',
+                    'Motorfiler:',
+                    ...(diagnostics?.assets ?? []).map(
+                      (asset) => `- ${asset.name}: ${asset.ok ? `${asset.bytes} B` : `FEJL ${asset.status ?? ''}`} (${asset.url})`,
+                    ),
+                    '',
+                    'Log:',
+                    ...(diagnostics?.log ?? []).map(
+                      (entry) => `${new Date(entry.at).toLocaleTimeString('da-DK')} · ${entry.text}`,
+                    ),
+                  ].join('\n');
+                  try {
+                    await navigator.clipboard.writeText(text);
+                    showToast('Diagnosen er kopieret');
+                  } catch {
+                    showToast('Kunne ikke kopiere — markér teksten i loggen', { tone: 'error' });
+                  }
+                }}
+              >
+                Kopiér diagnose
+              </button>
+            )}
           </div>
+
+          {showDiagnostics && (
+            <div className="diagnostics">
+              <h4>Motorfiler</h4>
+              <ul>
+                {(diagnostics?.assets ?? []).map((asset) => (
+                  <li key={asset.name}>
+                    <span>{asset.name}</span>
+                    <span className={asset.ok ? 'text-good' : 'text-bad'}>
+                      {asset.ok ? `${Math.round((asset.bytes ?? 0) / 1024)} kB` : `fejl ${asset.status ?? ''}`}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+              <h4>Log</h4>
+              <pre className="raw-text">
+                {(diagnostics?.log ?? [])
+                  .map((entry) => `${new Date(entry.at).toLocaleTimeString('da-DK')} · ${entry.text}`)
+                  .join('\n') || 'Ingen hændelser endnu'}
+              </pre>
+            </div>
+          )}
         </section>
       )}
 

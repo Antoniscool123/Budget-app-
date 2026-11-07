@@ -12,17 +12,18 @@ import { fileURLToPath } from 'node:url';
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const publicDir = join(root, 'public');
 const tesseractDir = join(publicDir, 'tesseract');
-const coreDir = join(tesseractDir, 'core');
 const tessdataDir = join(publicDir, 'tessdata');
 
 const files = [
   // Worker-script
   [join(root, 'node_modules/tesseract.js/dist/worker.min.js'), join(tesseractDir, 'worker.min.js')],
-  // wasm-kerne: både SIMD- og standardvariant, så alle browsere understøttes
-  [join(root, 'node_modules/tesseract.js-core/tesseract-core-simd-lstm.wasm.js'), join(coreDir, 'tesseract-core-simd-lstm.wasm.js')],
-  [join(root, 'node_modules/tesseract.js-core/tesseract-core-simd-lstm.wasm'), join(coreDir, 'tesseract-core-simd-lstm.wasm')],
-  [join(root, 'node_modules/tesseract.js-core/tesseract-core-lstm.wasm.js'), join(coreDir, 'tesseract-core-lstm.wasm.js')],
-  [join(root, 'node_modules/tesseract.js-core/tesseract-core-lstm.wasm'), join(coreDir, 'tesseract-core-lstm.wasm')],
+  // wasm-kerne: både SIMD- og standardvariant, så alle browsere understøttes.
+  // Filerne SKAL ligge ved siden af worker.min.js, fordi Tesseract finder sin
+  // .wasm-fil relativt til workerens placering (self.location).
+  [join(root, 'node_modules/tesseract.js-core/tesseract-core-simd-lstm.wasm.js'), join(tesseractDir, 'tesseract-core-simd-lstm.wasm.js')],
+  [join(root, 'node_modules/tesseract.js-core/tesseract-core-simd-lstm.wasm'), join(tesseractDir, 'tesseract-core-simd-lstm.wasm')],
+  [join(root, 'node_modules/tesseract.js-core/tesseract-core-lstm.wasm.js'), join(tesseractDir, 'tesseract-core-lstm.wasm.js')],
+  [join(root, 'node_modules/tesseract.js-core/tesseract-core-lstm.wasm'), join(tesseractDir, 'tesseract-core-lstm.wasm')],
   // Dansk sprogmodel (best/int = bedst nøjagtighed pr. kB)
   [join(root, 'node_modules/@tesseract.js-data/dan/4.0.0_best_int/dan.traineddata.gz'), join(tessdataDir, 'dan.traineddata.gz')],
 ];
