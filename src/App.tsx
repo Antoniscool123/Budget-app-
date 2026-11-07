@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { Capacitor } from '@capacitor/core';
 import type { Tab, Transaction } from './types';
 import { StoreProvider, useStore } from './store/StoreProvider';
 import { ToastProvider } from './store/ToastProvider';
@@ -47,6 +48,49 @@ function Shell() {
   const [settingsOpen, setSettingsOpen] = useState(false);
 
   const summary = summarizeMonth(state, monthKey);
+
+  // Fysisk tilbage-knap på Android: luk modal → til Overblik → minimér appen.
+  const backState = useRef({ tab, txnModalOpen: txnModal.open, detail: null as Transaction | null, settingsOpen });
+  backState.current = { tab, txnModalOpen: txnModal.open, detail, settingsOpen };
+
+  useEffect(() => {
+    if (!Capacitor.isNativePlatform()) return undefined;
+    let disposed = false;
+    let removeListener: (() => void) | undefined;
+
+    import('@capacitor/app')
+      .then(({ App: NativeApp }) => {
+        if (disposed) return;
+        void NativeApp.addListener('backButton', () => {
+          const current = backState.current;
+          if (current.txnModalOpen) {
+            setTxnModal({ open: false, transaction: null });
+            return;
+          }
+          if (current.detail) {
+            setDetail(null);
+            return;
+          }
+          if (current.settingsOpen) {
+            setSettingsOpen(false);
+            return;
+          }
+          if (current.tab !== 'overblik') {
+            setTab('overblik');
+            return;
+          }
+          void NativeApp.minimizeApp();
+        }).then((handle) => {
+          removeListener = () => void handle.remove();
+        });
+      })
+      .catch(() => undefined);
+
+    return () => {
+      disposed = true;
+      removeListener?.();
+    };
+  }, []);
   const currency = state.settings.currency;
 
   useEffect(() => {

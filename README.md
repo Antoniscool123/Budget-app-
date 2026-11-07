@@ -4,8 +4,10 @@ En komplet budget-app i browseren: **scan kvitteringen, og beløbet bliver læst
 Ingen manuel indtastning, ingen server, ingen konto. Sæt dit månedlige beløb, og appen regner
 ud, hvad du kan bruge hver dag.
 
-> Bygget med React + TypeScript + Vite. OCR kører 100 % lokalt i browseren med Tesseract.js —
-> dine kvitteringer uploades aldrig.
+> Bygget med React + TypeScript + Vite og pakket til Android med Capacitor. OCR kører 100 % lokalt
+> på enheden med Tesseract.js — dine kvitteringer uploades aldrig.
+
+📱 **[Download Android-appen (APK)](https://github.com/Antoniscool123/Budget-app-/releases/download/apk/kroner.apk)** — virker uden netværk og uden konto.
 
 ---
 
@@ -35,11 +37,43 @@ ud, hvad du kan bruge hver dag.
 - 6-måneders trendgraf med budgetmarkering pr. måned.
 - Fuldt søgbar historik, filtre pr. kategori, dagssummer og detaljevisning med kvitteringsbillede.
 
+### 📱 På telefonen
+- Samme app som Android-app (APK), med kamera-scanning direkte fra lommen.
+- Kvitteringsmotoren og sprogmodellen ligger i APK'en, så scanningen virker offline.
+- Android-tilbageknappen lukker modaler og går til Overblik i stedet for at lukke appen.
+
 ### 🔒 Dine data
 - Alt gemmes lokalt i browseren (localStorage + IndexedDB til billeder).
 - Backup og gendannelse som JSON, eksport til CSV (Excel-venlig med `;`).
 - Lys/mørk tilstand, valuta (DKK/EUR/SEK/NOK) og "slet alle data".
 - Eksempeldata med ét tryk, hvis du vil se appen fyldt ud.
+
+---
+
+## 📱 Android-app (APK)
+
+Appen findes også som rigtig Android-app, så du kan scanne kvitteringer direkte fra telefonen.
+
+**Download:** [kroner.apk](https://github.com/Antoniscool123/Budget-app-/releases/download/apk/kroner.apk)
+(alle versioner ligger under [Releases](https://github.com/Antoniscool123/Budget-app-/releases))
+
+Sådan installerer du den:
+1. Åbn linket på din Android-telefon.
+2. Tryk på den downloadede `kroner.apk`.
+3. Tillad "Installér ukendte apps", hvis telefonen spørger (gælder kun browseren/appen, du henter fra).
+4. Åbn **Kroner** — data bliver på telefonen.
+
+APK'en er en **debug-signeret testbygning**, ikke en Play Store-udgivelse. Den bygges
+automatisk af GitHub Actions (`.github/workflows/android.yml`) ved hver ændring på `main`:
+
+```bash
+npm run android:sync     # byg web-appen og kopiér den ind i Android-projektet
+npm run android:apk      # byg APK lokalt (kræver JDK 17 + Android SDK)
+npm run android:open     # åbn projektet i Android Studio
+npm run android:assets   # genskab launcher-ikoner og splash fra public/icon.svg
+```
+
+Projektet ligger i `android/` og kan åbnes direkte i Android Studio. App-id: `dk.kroner.budget`.
 
 ---
 
@@ -94,6 +128,11 @@ Parserens regelsæt er dækket af tests (`src/lib/receiptParser.test.ts`) med ri
 ## Projektstruktur
 
 ```
+android/                  # Capacitor-projekt (bygger APK)
+capacitor.config.ts       # app-id, navn og web-mappe
+scripts/
+  setup-ocr.mjs           # kopierer OCR-motoren ind i public/
+  generate-android-assets.mjs  # launcher-ikoner + splash
 public/
   demo/kvittering.jpg     # eksempel-bon til "prøv med eksempel"
   manifest.webmanifest    # installerbar web-app
@@ -135,6 +174,9 @@ datoformater, kategori), budgetmatematik, månedsarv og en røgtest af hele UI'e
 
 **Vercel / Netlify:** importér repoet, build-kommando `npm run build`, output-mappe `dist`.
 Ingen miljøvariabler eller server kræves.
+
+**Android:** `.github/workflows/android.yml` bygger APK'en og lægger den på release-tagget `apk`,
+så downloadlinket altid er det samme.
 
 Vil du køre appen på en undermappe, så sæt `BASE_PATH=/mit-repo/` ved build.
 

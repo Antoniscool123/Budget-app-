@@ -1,0 +1,89 @@
+name: Byg Android APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'src/**'
+      - 'public/**'
+      - 'android/**'
+      - 'capacitor.config.ts'
+      - 'vite.config.ts'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/android.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  apk:
+    name: Byg APK
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Installér afhængigheder
+        run: npm ci
+
+      - name: Byg web-appen
+        run: npm run build
+
+      - name: Kopiér web-assets til Android-projektet
+        run: npx cap sync android
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: gradle
+
+      - name: Byg debug-APK
+        run: |
+          cd android
+          chmod +x gradlew
+          ./gradlew assembleDebug --no-daemon --stacktrace
+
+      - name: Gør APK'en klar til download
+        run: |
+          cp android/app/build/outputs/apk/debug/app-debug.apk kroner.apk
+          ls -lh kroner.apk
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: kroner-apk
+          path: kroner.apk
+          retention-days: 90
+
+      - name: Læg APK'en på en release (fast downloadlink)
+        if: github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          cat > release-notes.md <<EOF
+          ## Kroner – Android-app
+
+          **Version:** $VERSION · **Bygget:** $(date -u '+%d.%m.%Y')
+
+          ### Sådan installerer du den
+          1. Åbn \`kroner.apk\` på din Android-telefon.
+          2. Tryk **Installér** (du skal måske tillade "Installér ukendte apps" for browseren).
+          3. Åbn **Kroner** — dine data bliver liggende på telefonen.
+
+          Appen indeholder hele budget-appen med kvitteringsscanning. OCR'en kører lokalt på
+          telefonen, så der kræves hverken netværk eller konto.
+
+          > Bemærk: dette er en debug-signeret test-APK, ikke en Play Store-udgivelse.
+          EOF
+
+          gh release view apk >/dev/null 2>&1 || \
+            gh release create apk --title "Kroner – Android APK" --notes-file release-notes.md --latest
+          gh release upload apk kroner.apk --clobber
+          gh release edit apk --notes-file release-notes.md --latest
