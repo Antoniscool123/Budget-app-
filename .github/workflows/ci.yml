@@ -16,5 +16,15 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run typecheck
-      - run: npm test
+      - name: Tests
+        run: |
+          set +e
+          npm test > test.log 2>&1
+          status=$?
+          cat test.log
+          if [ $status -ne 0 ]; then
+            reason=$(grep -E "FAIL|AssertionError|Error:|×" test.log | head -6 | tr '\n' ' ' | cut -c1-1200)
+            echo "::error title=Tests fejlede::${reason}"
+            exit $status
+          fi
       - run: npm run build
