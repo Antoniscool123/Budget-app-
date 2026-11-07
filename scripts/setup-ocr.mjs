@@ -5,7 +5,9 @@
  * Det gør scanningen fuldt offline-venlig og uafhængig af CDN'er — og holder
  * samtidig store binærfiler ude af git-historikken.
  */
-import { copyFileSync, existsSync, mkdirSync, statSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, statSync, writeFileSync } from 'node:fs';
+import { gunzipSync } from 'node:zlib';
+import { readFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -40,4 +42,19 @@ for (const [from, to] of files) {
   copied += 1;
 }
 
-console.log(copied === 0 ? '✓ OCR-filer er allerede på plads' : `✓ Kopierede ${copied} OCR-filer til public/`);
+// Sprogmodellen lægges udpakket i samme mappe som workeren — den mappe ved vi
+// bliver leveret i APK'en. Den pakkede .gz-fil bliver liggende i tessdata som
+// reserve, hvis en platform foretrækker den.
+const gzPath = join(tessdataDir, 'dan.traineddata.gz');
+const plainPath = join(tesseractDir, 'dan.traineddata');
+// Samme fil under et .wasm-navn: Android-WebView'en leverer .wasm-filer med en
+// kendt MIME-type, så vi altid har en vej til sprogmodellen.
+const wasmAliasPath = join(tesseractDir, 'dan.traineddata.wasm');
+if (existsSync(gzPath) && (!existsSync(plainPath) || statSync(plainPath).size < 100000)) {
+  const model = gunzipSync(readFileSync(gzPath));
+  writeFileSync(plainPath, model);
+  writeFileSync(wasmAliasPath, model);
+  copied += 1;
+}
+
+console.log(copied === 0 ? '✓ OCR-filer er allerede på plads' : `✓ Kopierede og udpakkede ${copied} OCR-filer til public/`);
