@@ -2860,3 +2860,55 @@ img {
     align-self: flex-start;
   }
 }
+
+/* ---------- status for tekstgenkendelsen ---------- */
+
+.engine-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 2px;
+  padding: 7px 12px;
+  border-radius: 14px;
+  background: var(--surface-2);
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.engine-dot {
+  width: 8px;
+  height: 8px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--accent);
+  animation: enginePulse 1.4s ease-in-out infinite;
+}
+
+.engine-status.ready {
+  background: color-mix(in srgb, var(--good) 10%, transparent);
+  color: var(--good);
+}
+.engine-status.ready .engine-dot {
+  background: var(--good);
+  animation: none;
+}
+.engine-status.error {
+  background: color-mix(in srgb, var(--bad) 10%, transparent);
+  color: var(--bad);
+}
+.engine-status.error .engine-dot {
+  background: var(--bad);
+  animation: none;
+}
+
+@keyframes enginePulse {
+  0%,
+  100% {
+    opacity: 0.35;
+    transform: scale(0.8);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}

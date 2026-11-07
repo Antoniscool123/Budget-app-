@@ -58,6 +58,9 @@ ud, hvad du kan bruge hver dag.
 - **Flere boner på én gang**: vælg eller slip flere billeder, og appen læser dem én ad gangen
   ("Bon 2 af 3"), så du slipper for at starte forfra hver gang.
 - Fandt OCR'en intet beløb, står markøren klar i beløbsfeltet.
+- **Hurtig første scanning**: tekstmotoren klargøres i baggrunden, allerede når appen åbnes, så
+  wasm og den danske sprogmodel er klar inden du vælger billede. Undervejs viser appen status
+  ("Klargør scanneren"), sekundtæller og en genvej til manuel indtastning, hvis det trækker ud.
 - **Alt behandles lokalt**: billedet forlader aldrig enheden, og der bruges ingen API-nøgler.
 
 ### 🎯 Månedligt budget

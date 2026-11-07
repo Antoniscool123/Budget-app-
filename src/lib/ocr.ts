@@ -21,6 +21,32 @@ let worker: Worker | null = null;
 let workerPromise: Promise<Worker> | null = null;
 let currentProgress: ProgressFn = () => {};
 let lastLoggedStage = '';
+let warmStarted = false;
+
+export type OcrStatus = 'idle' | 'warming' | 'ready' | 'error';
+
+let status: OcrStatus = 'idle';
+const statusListeners = new Set<(status: OcrStatus) => void>();
+
+function setStatus(next: OcrStatus): void {
+  if (status === next) return;
+  status = next;
+  statusListeners.forEach((listener) => listener(next));
+}
+
+/** Er motoren klar til at læse en kvittering? */
+export function getOcrStatus(): OcrStatus {
+  return status;
+}
+
+/** Abonnér på motorens tilstand — bruges til at vise "klargør scanner" i UI'et. */
+export function subscribeOcrStatus(listener: (status: OcrStatus) => void): () => void {
+  statusListeners.add(listener);
+  listener(status);
+  return () => {
+    statusListeners.delete(listener);
+  };
+}
 
 const assetBase = (path: string) => `${import.meta.env.BASE_URL}${path}`.replace(/([^:]\/)\/+/g, '$1');
 
@@ -58,13 +84,16 @@ function createOcrWorker(): Promise<Worker> {
 async function getWorker(): Promise<Worker> {
   if (worker) return worker;
   if (!workerPromise) {
+    setStatus('warming');
     workerPromise = createOcrWorker()
       .then((created) => {
         worker = created;
+        setStatus('ready');
         return created;
       })
       .catch((error) => {
         workerPromise = null;
+        setStatus('error');
         throw error;
       });
   }
@@ -194,13 +223,49 @@ export async function terminateOcr(): Promise<void> {
   if (active) await active.terminate().catch(() => undefined);
 }
 
+/**
+ * Den første scanning er dyr, fordi Tesseract skal hente worker + wasm-kerne,
+ * indlæse den danske sprogmodel og varme WASM op. Det gør vi i baggrunden, så
+ * snart appen er åbnet — så er motoren typisk klar, når brugeren vælger et billede.
+ */
+async function warmUpEngine(): Promise<void> {
+  try {
+    const activeWorker = await getWorker();
+    // En lille genkendelse tvinger sprogmodellen ind i WASM-hukommelsen, så den
+    // første rigtige scanning ikke skal betale for det.
+    const canvas = document.createElement('canvas');
+    canvas.width = 260;
+    canvas.height = 96;
+    const ctx = canvas.getContext('2d');
+    if (ctx) {
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.fillStyle = '#000000';
+      ctx.font = '26px sans-serif';
+      ctx.fillText('TOTAL 0,00', 12, 56);
+      await activeWorker.recognize(canvas.toDataURL('image/png'));
+    }
+    setStatus('ready');
+  } catch {
+    // Selve motoren kan godt være klar, selv om opvarmningen fejlede.
+    setStatus(worker ? 'ready' : 'error');
+  }
+}
+
 /** Varmer motoren op i baggrunden, så første scanning går hurtigere. */
 export function prewarmOcr(): void {
+  if (warmStarted) return;
+  warmStarted = true;
+
+  const start = () => {
+    void warmUpEngine();
+  };
   const idle = (window as unknown as { requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => void })
     .requestIdleCallback;
-  const start = () => {
-    getWorker().catch(() => undefined);
-  };
-  if (idle) idle(start, { timeout: 4000 });
-  else setTimeout(start, 1500);
+
+  // Første paint skal ikke vente på wasm — men vi venter kun ganske kort.
+  window.setTimeout(() => {
+    if (idle) idle(start, { timeout: 1500 });
+    else start();
+  }, 250);
 }

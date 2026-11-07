@@ -1,8 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { CategoryId, ParsedReceipt, ReceiptItem } from '../types';
 import { CATEGORIES, getCategory } from '../data/categories';
-import { prepareImage, rotateImage } from '../lib/image';
-import { runOcr, prewarmOcr, type OcrProgress } from '../lib/ocr';
+import { cropImage, prepareImage, rotateImage } from '../lib/image';
+import {
+  getOcrStatus,
+  prewarmOcr,
+  runOcr,
+  subscribeOcrStatus,
+  type OcrProgress,
+  type OcrStatus,
+} from '../lib/ocr';
 import { parseReceipt } from '../lib/receiptParser';
 import { rememberedCategory } from '../lib/merchants';
 import { findDuplicate } from '../lib/duplicates';
@@ -64,10 +71,26 @@ export function ScanPage({ onManualEntry }: { onManualEntry: () => void }) {
   const [rerunning, setRerunning] = useState(false);
   const [duplicate, setDuplicate] = useState<Transaction | null>(null);
 
+  const [engineStatus, setEngineStatus] = useState<OcrStatus>(getOcrStatus());
+  const [elapsed, setElapsed] = useState(0);
+
   const cameraRef = useRef<HTMLInputElement>(null);
   const uploadRef = useRef<HTMLInputElement>(null);
   const objectUrlRef = useRef<string | null>(null);
   const abortRef = useRef(false);
+
+  useEffect(() => subscribeOcrStatus(setEngineStatus), []);
+
+  // Sekundtæller under scanning, så man kan se at der stadig arbejdes.
+  useEffect(() => {
+    if (phase !== 'processing') {
+      setElapsed(0);
+      return undefined;
+    }
+    const started = Date.now();
+    const timer = window.setInterval(() => setElapsed(Math.floor((Date.now() - started) / 1000)), 500);
+    return () => window.clearInterval(timer);
+  }, [phase]);
 
   useEffect(() => {
     prewarmOcr();
@@ -126,7 +149,9 @@ export function ScanPage({ onManualEntry }: { onManualEntry: () => void }) {
         if (parsed.amount === undefined) {
           setProgress({ stage: 'recognize', progress: 0.9, message: 'Prøver en ekstra læsning' });
           try {
-            const retry = await runOcr(prepared.ocrDataUrl, () => undefined, 'sparse');
+            // Kun nederste del af bonen — der står totalen, og det går markant hurtigere.
+            const lowerPart = await cropImage(prepared.ocrDataUrl, 0.35);
+            const retry = await runOcr(lowerPart, () => undefined, 'sparse');
             const retryParsed = parseReceipt(retry.text);
             if (retryParsed.amount !== undefined || retryParsed.confidence > parsed.confidence) {
               parsed = retryParsed;
@@ -364,6 +389,14 @@ export function ScanPage({ onManualEntry }: { onManualEntry: () => void }) {
               Tag et billede af bonen, og appen finder selv totalen, datoen, butikken og varelinjerne.
               Du skal kun godkende.
             </p>
+            {engineStatus !== 'ready' && (
+              <p className={`engine-status ${engineStatus}`}>
+                <span className="engine-dot" aria-hidden="true" />
+                {engineStatus === 'error'
+                  ? 'Scanneren kunne ikke klargøres — du kan indtaste udgiften manuelt'
+                  : 'Klargør scanneren i baggrunden — kun første gang'}
+              </p>
+            )}
           </section>
 
           <div
@@ -494,12 +527,21 @@ export function ScanPage({ onManualEntry }: { onManualEntry: () => void }) {
               <div className="bar-fill teal" style={{ width: `${Math.round((progress?.progress ?? 0.02) * 100)}%` }} />
             </div>
             <div className="row-between small muted">
-              <span>{Math.round((progress?.progress ?? 0.02) * 100)} %</span>
-              <span>Første gang tager det lidt længere</span>
+              <span>
+                {Math.round((progress?.progress ?? 0.02) * 100)} %{elapsed > 0 ? ` · ${elapsed} sek.` : ''}
+              </span>
+              <span>{elapsed >= 6 ? 'Næste gang går det meget hurtigere' : 'Klargør billedet'}</span>
             </div>
-            <button type="button" className="btn btn-ghost btn-sm" onClick={reset}>
-              Annullér
-            </button>
+            <div className="row-wrap">
+              <button type="button" className="btn btn-ghost btn-sm" onClick={reset}>
+                Annullér
+              </button>
+              {elapsed >= 12 && (
+                <button type="button" className="link-btn" onClick={onManualEntry}>
+                  Det tager for langt — indtast manuelt
+                </button>
+              )}
+            </div>
           </div>
         </section>
       )}
