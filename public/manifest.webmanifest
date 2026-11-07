@@ -1,0 +1,21 @@
+{
+  "name": "Kroner — budget & kvitteringsscan",
+  "short_name": "Kroner",
+  "description": "Scan kvitteringer med OCR, sæt et månedligt budget og følg forbruget. Alt gemmes lokalt på din enhed.",
+  "lang": "da-DK",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#f3f6fb",
+  "theme_color": "#0d9488",
+  "categories": ["finance", "productivity"],
+  "icons": [
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}
