@@ -9,6 +9,12 @@ ud, hvad du kan bruge hver dag.
 
 📱 **[Download Android-appen (APK)](https://github.com/Antoniscool123/Budget-app-/releases/download/apk/kroner.apk)** — virker uden netværk og uden konto.
 
+<p align="center">
+  <img src="docs/kroner-apk-qr.png" alt="QR-kode til APK-download" width="220" />
+  <br />
+  <em>Scan med telefonens kamera for at hente APK'en</em>
+</p>
+
 ---
 
 ## Funktioner
