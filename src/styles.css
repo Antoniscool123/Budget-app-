@@ -2912,3 +2912,37 @@ img {
     transform: scale(1);
   }
 }
+
+/* ---------- diagnostik for scanneren ---------- */
+
+.diagnostics {
+  width: 100%;
+  margin-top: 6px;
+  padding: 14px;
+  border-radius: 16px;
+  background: var(--surface-2);
+}
+.diagnostics h4 {
+  margin-bottom: 6px;
+}
+.diagnostics h4 + ul + h4 {
+  margin-top: 12px;
+}
+.diagnostics ul {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.78rem;
+}
+.diagnostics ul li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.diagnostics .raw-text {
+  max-height: 220px;
+  margin-top: 0;
+  background: var(--surface);
+}

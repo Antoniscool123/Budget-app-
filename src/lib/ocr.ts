@@ -4,6 +4,9 @@ import { createWorker, PSM, type Worker } from 'tesseract.js';
  * OCR i browseren via Tesseract.js. Motoren, sproget (dansk) og wasm-filerne
  * serveres fra appen selv, så scanningen virker uden eksterne tjenester —
  * og uden at billedet nogensinde forlader enheden.
+ *
+ * Alt her er bygget til at fejle hurtigt og tydeligt: hellere en besked om
+ * hvad der gik galt end en scanning, der hænger for evigt.
  */
 
 export type OcrStage = 'prepare' | 'loading' | 'recognize' | 'parse' | 'done';
@@ -17,13 +20,29 @@ export interface OcrProgress {
 
 type ProgressFn = (progress: OcrProgress) => void;
 
+export type OcrStatus = 'idle' | 'checking' | 'warming' | 'ready' | 'error';
+
+const WORKER_TIMEOUT_MS = 15_000;
+const RECOGNIZE_TIMEOUT_MS = 60_000;
+
 let worker: Worker | null = null;
 let workerPromise: Promise<Worker> | null = null;
 let currentProgress: ProgressFn = () => {};
 let lastLoggedStage = '';
 let warmStarted = false;
+let errorMessage = '';
 
-export type OcrStatus = 'idle' | 'warming' | 'ready' | 'error';
+const assetBase = (path: string) => `${import.meta.env.BASE_URL}${path}`.replace(/([^:]\/)\/+/g, '$1');
+
+const workerUrl = () => assetBase('tesseract/worker.min.js');
+// Kernefilerne ligger bevidst i samme mappe som worker.min.js — Tesseract
+// slår sin .wasm-fil op relativt til workerens placering.
+const coreDir = () => assetBase('tesseract');
+const langUrl = () => assetBase('tessdata/dan.traineddata.gz');
+
+/* ------------------------------------------------------------------ */
+/* Status og diagnostik                                                */
+/* ------------------------------------------------------------------ */
 
 let status: OcrStatus = 'idle';
 const statusListeners = new Set<(status: OcrStatus) => void>();
@@ -39,6 +58,11 @@ export function getOcrStatus(): OcrStatus {
   return status;
 }
 
+/** Seneste fejlbesked fra motoren (tom hvis ingen). */
+export function getOcrError(): string {
+  return errorMessage;
+}
+
 /** Abonnér på motorens tilstand — bruges til at vise "klargør scanner" i UI'et. */
 export function subscribeOcrStatus(listener: (status: OcrStatus) => void): () => void {
   statusListeners.add(listener);
@@ -48,29 +72,138 @@ export function subscribeOcrStatus(listener: (status: OcrStatus) => void): () =>
   };
 }
 
-const assetBase = (path: string) => `${import.meta.env.BASE_URL}${path}`.replace(/([^:]\/)\/+/g, '$1');
+export interface OcrLogEntry {
+  at: number;
+  text: string;
+}
 
-function createOcrWorker(): Promise<Worker> {
+const logEntries: OcrLogEntry[] = [];
+
+function addLog(text: string): void {
+  logEntries.push({ at: Date.now(), text });
+  if (logEntries.length > 80) logEntries.shift();
+  if (import.meta.env.DEV) console.info('[ocr]', text);
+}
+
+/** Tidsstemplet log fra motoren — vises under "Vis detaljer". */
+export function getOcrLog(): OcrLogEntry[] {
+  return [...logEntries];
+}
+
+export interface OcrAssetCheck {
+  name: string;
+  url: string;
+  ok: boolean;
+  status?: number;
+  bytes?: number;
+}
+
+/**
+ * Tjekker at motorfilerne faktisk kan hentes. Det fanger fx en manglende
+ * worker-fil i en APK, hvor Tesseract ellers bare ville vente for evigt.
+ */
+export async function checkOcrAssets(scope: 'essential' | 'all' = 'all'): Promise<OcrAssetCheck[]> {
+  const essential = [
+    { name: 'worker.min.js', url: workerUrl() },
+    { name: 'dan.traineddata.gz', url: langUrl() },
+  ];
+  const targets =
+    scope === 'essential'
+      ? essential
+      : [
+          ...essential,
+          { name: 'tesseract-core-simd-lstm.wasm', url: `${coreDir()}/tesseract-core-simd-lstm.wasm` },
+          { name: 'tesseract-core-lstm.wasm', url: `${coreDir()}/tesseract-core-lstm.wasm` },
+          { name: 'tesseract-core-simd-lstm.wasm.js', url: `${coreDir()}/tesseract-core-simd-lstm.wasm.js` },
+          { name: 'tesseract-core-lstm.wasm.js', url: `${coreDir()}/tesseract-core-lstm.wasm.js` },
+        ];
+
+  const results: OcrAssetCheck[] = [];
+  for (const target of targets) {
+    try {
+      const response = await fetch(target.url, { cache: 'force-cache' });
+      const blob = response.ok ? await response.blob() : undefined;
+      results.push({
+        ...target,
+        ok: response.ok && (blob?.size ?? 0) > 1024,
+        status: response.status,
+        bytes: blob?.size,
+      });
+    } catch {
+      results.push({ ...target, ok: false });
+    }
+  }
+  return results;
+}
+
+/* ------------------------------------------------------------------ */
+/* Worker-håndtering                                                   */
+/* ------------------------------------------------------------------ */
+
+function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = window.setTimeout(() => {
+      reject(new Error(`${label} svarede ikke inden ${Math.round(ms / 1000)} sekunder`));
+    }, ms);
+    promise.then(
+      (value) => {
+        window.clearTimeout(timer);
+        resolve(value);
+      },
+      (error: unknown) => {
+        window.clearTimeout(timer);
+        reject(error instanceof Error ? error : new Error(String(error)));
+      },
+    );
+  });
+}
+
+interface OcrAttempt {
+  name: string;
+  workerBlobURL: boolean;
+  corePath: string;
+}
+
+/**
+ * To måder at starte motoren på: den automatiske kerne (SIMD hvis enheden
+ * understøtter det) og en eksplicit kerne uden SIMD til gamle WebViews.
+ */
+function attemptConfigs(): OcrAttempt[] {
+  const autoCore = coreDir();
+  const plainCore = `${coreDir()}/tesseract-core-lstm.wasm.js`;
+  return [
+    { name: 'standard', workerBlobURL: false, corePath: autoCore },
+    { name: 'uden SIMD', workerBlobURL: false, corePath: plainCore },
+  ];
+}
+
+function createOcrWorker(attempt: OcrAttempt): Promise<Worker> {
   return createWorker('dan', 1, {
-    workerPath: assetBase('tesseract/worker.min.js'),
-    corePath: assetBase('tesseract/core'),
+    workerPath: workerUrl(),
+    corePath: attempt.corePath,
     langPath: assetBase('tessdata'),
-    workerBlobURL: false,
+    workerBlobURL: attempt.workerBlobURL,
     gzip: true,
     cacheMethod: 'readwrite',
     logger: (message: { status?: string; progress?: number }) => {
-      const status = message.status ?? '';
+      const stage = message.status ?? '';
       const progress = typeof message.progress === 'number' ? message.progress : 0;
-      if (status === lastLoggedStage && progress < 1) return;
-      lastLoggedStage = status;
+      if (stage === lastLoggedStage && progress < 1) return;
+      lastLoggedStage = stage;
+      addLog(`${stage} ${Math.round(progress * 100)} %`);
 
-      if (status.includes('language') || status.includes('tesseract core') || status.includes('initializ')) {
+      if (stage.includes('language') || stage.includes('tesseract core') || stage.includes('initializ')) {
         currentProgress({
           stage: 'loading',
           progress: 0.08 + progress * 0.3,
-          message: 'Indlæser tekstmotoren (kun første gang)',
+          message:
+            stage.includes('language')
+              ? 'Indlæser dansk sprogmodel'
+              : stage.includes('core')
+                ? 'Indlæser tekstmotoren'
+                : 'Starter tekstgenkendelsen',
         });
-      } else if (status === 'recognizing text') {
+      } else if (stage === 'recognizing text') {
         currentProgress({
           stage: 'recognize',
           progress: 0.4 + progress * 0.52,
@@ -83,22 +216,85 @@ function createOcrWorker(): Promise<Worker> {
 
 async function getWorker(): Promise<Worker> {
   if (worker) return worker;
-  if (!workerPromise) {
+  if (workerPromise) return workerPromise;
+
+  workerPromise = (async () => {
+    setStatus('checking');
+    addLog('Tjekker motorfiler');
+    const assets = await checkOcrAssets('essential');
+    addLog(
+      assets
+        .map((asset) => `${asset.name}: ${asset.ok ? `${asset.bytes} B` : `FEJL ${asset.status ?? ''}`}`)
+        .join(' · '),
+    );
+
+    const essential = assets.filter((asset) => asset.name === 'worker.min.js' || asset.name === 'dan.traineddata.gz');
+    const broken = essential.filter((asset) => !asset.ok);
+    if (broken.length > 0) {
+      const detail = broken.map((asset) => `${asset.name} (${asset.status ?? 'kunne ikke hentes'})`).join(', ');
+      throw new Error(`Motorfilerne kan ikke hentes i appen: ${detail}`);
+    }
+
     setStatus('warming');
-    workerPromise = createOcrWorker()
-      .then((created) => {
+
+    const attempts = attemptConfigs();
+    let lastError: unknown = null;
+
+    for (const attempt of attempts) {
+      addLog(`Opretter tekstmotor (${attempt.name})`);
+      try {
+        const created = await withTimeout(
+          createOcrWorker(attempt),
+          WORKER_TIMEOUT_MS,
+          `Klargøring af tekstmotoren (${attempt.name})`,
+        );
+        addLog(`Tekstmotoren er klar — ${attempt.name}`);
         worker = created;
+        lastLoggedStage = '';
         setStatus('ready');
         return created;
-      })
-      .catch((error) => {
-        workerPromise = null;
-        setStatus('error');
-        throw error;
-      });
-  }
+      } catch (error) {
+        lastError = error;
+        addLog(`Forsøg «${attempt.name}» fejlede: ${error instanceof Error ? error.message : String(error)}`);
+      }
+    }
+
+    throw new Error(
+      lastError instanceof Error
+        ? `Scanneren kunne ikke starte: ${lastError.message}`
+        : 'Scanneren kunne ikke starte på denne enhed',
+    );
+  })().catch((error: unknown) => {
+    workerPromise = null;
+    errorMessage = error instanceof Error ? error.message : String(error);
+    addLog(`FEJL: ${errorMessage}`);
+    setStatus('error');
+    throw error instanceof Error ? error : new Error(String(error));
+  });
+
   return workerPromise;
 }
+
+/** Smider den nuværende motor væk, så næste scanning starter helt forfra. */
+export async function resetOcrEngine(): Promise<void> {
+  const active = worker;
+  worker = null;
+  workerPromise = null;
+  warmStarted = false;
+  errorMessage = '';
+  lastLoggedStage = '';
+  try {
+    await active?.terminate();
+  } catch {
+    /* ignorér */
+  }
+  setStatus('idle');
+  addLog('Motoren er nulstillet');
+}
+
+/* ------------------------------------------------------------------ */
+/* Genkendelse                                                         */
+/* ------------------------------------------------------------------ */
 
 export interface OcrResult {
   text: string;
@@ -196,12 +392,27 @@ export async function runOcr(
   // holder varenavn og beløb på samme linje, hvilket er afgørende for at
   // kunne læse både total og varelinjer. "Sparse text" bruges som fallback
   // på særligt rodede boner.
-  await activeWorker.setParameters({
-    tessedit_pageseg_mode: mode === 'sparse' ? PSM.SPARSE_TEXT : PSM.SINGLE_COLUMN,
-    preserve_interword_spaces: '1',
-  });
+  await withTimeout(
+    activeWorker.setParameters({
+      tessedit_pageseg_mode: mode === 'sparse' ? PSM.SPARSE_TEXT : PSM.SINGLE_COLUMN,
+      preserve_interword_spaces: '1',
+    }),
+    15_000,
+    'Indstilling af læsetilstand',
+  );
 
-  const { data } = await activeWorker.recognize(imageDataUrl, {}, { text: true, blocks: true });
+  let data;
+  try {
+    ({ data } = await withTimeout(
+      activeWorker.recognize(imageDataUrl, {}, { text: true, blocks: true }),
+      RECOGNIZE_TIMEOUT_MS,
+      'Genkendelse af teksten',
+    ));
+  } catch (error) {
+    // En fastlåst worker kan ikke bruges igen — smid den væk.
+    await resetOcrEngine();
+    throw error;
+  }
 
   onProgress({ stage: 'parse', progress: 0.94, message: 'Tolker beløb, dato og varer' });
 
@@ -217,53 +428,24 @@ export async function runOcr(
 }
 
 export async function terminateOcr(): Promise<void> {
-  const active = worker;
-  worker = null;
-  workerPromise = null;
-  if (active) await active.terminate().catch(() => undefined);
+  await resetOcrEngine();
 }
 
 /**
- * Den første scanning er dyr, fordi Tesseract skal hente worker + wasm-kerne,
- * indlæse den danske sprogmodel og varme WASM op. Det gør vi i baggrunden, så
- * snart appen er åbnet — så er motoren typisk klar, når brugeren vælger et billede.
+ * Klargører motoren i baggrunden, så den er varm når brugeren vælger et
+ * billede. Der laves ingen test-genkendelse — kun selve initialiseringen,
+ * som er den tunge del.
  */
-async function warmUpEngine(): Promise<void> {
-  try {
-    const activeWorker = await getWorker();
-    // En lille genkendelse tvinger sprogmodellen ind i WASM-hukommelsen, så den
-    // første rigtige scanning ikke skal betale for det.
-    const canvas = document.createElement('canvas');
-    canvas.width = 260;
-    canvas.height = 96;
-    const ctx = canvas.getContext('2d');
-    if (ctx) {
-      ctx.fillStyle = '#ffffff';
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-      ctx.fillStyle = '#000000';
-      ctx.font = '26px sans-serif';
-      ctx.fillText('TOTAL 0,00', 12, 56);
-      await activeWorker.recognize(canvas.toDataURL('image/png'));
-    }
-    setStatus('ready');
-  } catch {
-    // Selve motoren kan godt være klar, selv om opvarmningen fejlede.
-    setStatus(worker ? 'ready' : 'error');
-  }
-}
-
-/** Varmer motoren op i baggrunden, så første scanning går hurtigere. */
 export function prewarmOcr(): void {
-  if (warmStarted) return;
+  if (warmStarted || status === 'ready' || status === 'warming' || status === 'checking') return;
   warmStarted = true;
 
   const start = () => {
-    void warmUpEngine();
+    void getWorker().catch(() => undefined);
   };
   const idle = (window as unknown as { requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => void })
     .requestIdleCallback;
 
-  // Første paint skal ikke vente på wasm — men vi venter kun ganske kort.
   window.setTimeout(() => {
     if (idle) idle(start, { timeout: 1500 });
     else start();
