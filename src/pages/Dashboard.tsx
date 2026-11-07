@@ -2,10 +2,9 @@ import type { Tab, Transaction } from '../types';
 import { useStore } from '../store/StoreProvider';
 import { summarizeMonth, transactionsInMonth } from '../lib/budget';
 import { detectRecurring, monthlyTotal } from '../lib/recurring';
-import { formatMoney, formatPercent, formatRelativeDay } from '../lib/format';
+import { convertAmount, formatMoney, formatNumber, formatPercent, formatRelativeDay } from '../lib/format';
 import { currentMonthKey, monthLabel, monthProgress, todayISO } from '../lib/dates';
-import { ProgressRing } from '../components/ui/ProgressRing';
-import { CategoryChip, CategoryAvatar } from '../components/ui/CategoryChip';
+import { CategoryAvatar } from '../components/ui/CategoryChip';
 import { ReceiptThumb } from '../components/ReceiptThumb';
 import { Icon } from '../components/Icon';
 import { getCategory } from '../data/categories';
@@ -60,101 +59,48 @@ export function Dashboard({ monthKey, onNavigate, onOpenTransaction, onOpenBudge
     <div className="stack">
       {!hasAnyData && (
         <section className="card onboard">
-          <div className="onboard-copy">
-            <span className="badge badge-accent">
-              <Icon name="sparkles" size={14} /> Velkommen
-            </span>
-            <h2>Kom i gang på under et minut</h2>
-            <p className="muted">
-              Scan en kvittering og appen læser selv beløbet, datoen og butikken. Vi har startet med et
-              standardbudget på {formatMoney(summary.budget.total, currency, { compact: true })} — ret det til dit eget, og se
-              hvor meget du har tilbage hver dag.
-            </p>
-            <div className="onboard-actions">
-              <button type="button" className="btn btn-primary" onClick={() => onNavigate('scan')}>
-                <Icon name="scan" size={18} /> Scan første kvittering
-              </button>
-              <button type="button" className="btn btn-ghost" onClick={onOpenBudget}>
-                <Icon name="target" size={18} /> Sæt månedsbudget
-              </button>
-              <button type="button" className="btn btn-ghost" onClick={loadDemoData}>
-                <Icon name="sparkles" size={18} /> Se med eksempeldata
-              </button>
-            </div>
+          <span className="badge badge-accent">
+            <Icon name="sparkles" size={14} /> Velkommen
+          </span>
+          <h2>Kom i gang på under et minut</h2>
+          <p className="muted">
+            Scan en kvittering, og appen læser selv beløbet. Vi har startet med et standardbudget på{' '}
+            {formatMoney(summary.budget.total, currency, { compact: true })}.
+          </p>
+          <div className="onboard-actions">
+            <button type="button" className="btn btn-primary" onClick={() => onNavigate('scan')}>
+              <Icon name="scan" size={18} /> Scan første kvittering
+            </button>
+            <button type="button" className="btn btn-ghost" onClick={onOpenBudget}>
+              <Icon name="target" size={18} /> Sæt månedsbudget
+            </button>
+            <button type="button" className="btn btn-ghost" onClick={loadDemoData}>
+              <Icon name="sparkles" size={18} /> Se med eksempeldata
+            </button>
           </div>
         </section>
       )}
 
       <section className={`hero card ${tone}`}>
-        <div className="hero-main">
-          <div className="hero-copy">
-            <p className="eyebrow">Tilbage i {monthLabel(monthKey).toLowerCase()}</p>
-            <p className="hero-amount">
-              {formatMoney(Math.max(summary.remaining, 0), currency, { compact: true })}
-            </p>
-            <p className="muted">
-              {budgetSet ? `af ${formatMoney(summary.budget.total, currency, { compact: true })} budget` : 'intet budget sat endnu'}
-              {summary.count > 0 && ` · ${summary.count} ${summary.count === 1 ? 'køb' : 'køb'}`}
-            </p>
-
-            <div className="hero-pills">
-              <span className={`pill pill-${tone}`}>
-                {budgetSet ? `${formatPercent(spentPercent)} brugt` : 'Ingen budget'}
-              </span>
-              {isCurrent && (
-                <span className="pill">
-                  <Icon name="clock" size={13} /> {summary.daysLeft} dage tilbage
-                </span>
-              )}
-              {!isCurrent && (
-                <span className="pill">
-                  <Icon name="calendar" size={13} /> {summary.daysInMonth} dage
-                </span>
-              )}
-              {usingDefaultBudget && <span className="pill">Standardbudget</span>}
-            </div>
-          </div>
-
-          <ProgressRing value={budgetSet ? spentPercent : 0} tone={tone} label="Budget brugt">
-            <strong>{budgetSet ? `${Math.round(spentPercent * 100)}%` : '–'}</strong>
-            <span>brugt</span>
-          </ProgressRing>
+        <div className="hero-top">
+          <p className="eyebrow">Tilbage i {monthLabel(monthKey).toLowerCase()}</p>
+          <span className={`pill pill-${tone}`}>
+            {budgetSet ? `${formatPercent(spentPercent)} brugt` : 'Intet budget'}
+          </span>
         </div>
 
-        <div className="hero-stats">
-          <div>
-            <span className="stat-label">Brugt</span>
-            <strong>{formatMoney(summary.spent, currency, { compact: true })}</strong>
-          </div>
-          <div>
-            <span className="stat-label">{isCurrent ? 'Kan bruges pr. dag' : 'Gennemsnit pr. dag'}</span>
-            <strong>
-              {formatMoney(
-                isCurrent ? Math.max(0, summary.dailyAllowance) : summary.averagePerDay,
-                currency,
-                { compact: true },
-              )}
-            </strong>
-          </div>
-          <div>
-            <span className="stat-label">Forventet ved månedsslut</span>
-            <strong className={summary.projectedOver > 0 && budgetSet ? 'text-bad' : ''}>
-              {formatMoney(summary.projected, currency, { compact: true })}
-            </strong>
-          </div>
-        </div>
+        <p className="hero-amount">
+          {formatNumber(convertAmount(Math.max(summary.remaining, 0), currency))}
+          <span className="hero-unit">{currency === 'DKK' ? 'kr' : currency}</span>
+        </p>
 
-        {isCurrent && budgetSet && summary.daysLeft > 0 && (
-          <div className={`hero-daily ${summary.dailyAllowance < 0 ? 'bad' : ''}`}>
-            <span className="hero-daily-icon" aria-hidden="true">
-              <Icon name="clock" size={17} />
-            </span>
-            <span>
-              Du kan bruge <strong>{formatMoney(Math.max(0, summary.dailyAllowance), currency, { compact: true })}</strong> om
-              dagen de næste {summary.daysLeft} {summary.daysLeft === 1 ? 'dag' : 'dage'}
-            </span>
-          </div>
-        )}
+        <p className="muted small">
+          {budgetSet
+            ? `af ${formatMoney(summary.budget.total, currency, { compact: true })} · ${summary.count} ${
+                summary.count === 1 ? 'køb' : 'køb'
+              }`
+            : 'Sæt et månedsbeløb for at se, hvad du har tilbage'}
+        </p>
 
         <div className="budget-bar" aria-hidden="true">
           <div className="budget-bar-fill" style={{ width: `${Math.min(100, spentPercent * 100)}%` }} />
@@ -165,15 +111,51 @@ export function Dashboard({ monthKey, onNavigate, onOpenTransaction, onOpenBudge
           />
         </div>
 
+        {isCurrent && budgetSet && summary.daysLeft > 0 && (
+          <div className={`hero-daily ${summary.dailyAllowance < 0 ? 'bad' : ''}`}>
+            <span className="hero-daily-icon" aria-hidden="true">
+              <Icon name="clock" size={16} />
+            </span>
+            <span>
+              Du kan bruge{' '}
+              <strong>{formatMoney(Math.max(0, summary.dailyAllowance), currency, { compact: true })}</strong> om
+              dagen de næste {summary.daysLeft} {summary.daysLeft === 1 ? 'dag' : 'dage'}
+            </span>
+          </div>
+        )}
+
+        <div className="hero-stats">
+          <div>
+            <span className="stat-label">Brugt</span>
+            <strong>{formatMoney(summary.spent, currency, { compact: true })}</strong>
+          </div>
+          <div>
+            <span className="stat-label">{isCurrent ? 'Pr. dag' : 'Gns. pr. dag'}</span>
+            <strong>
+              {formatMoney(
+                isCurrent ? Math.max(0, summary.dailyAllowance) : summary.averagePerDay,
+                currency,
+                { compact: true },
+              )}
+            </strong>
+          </div>
+          <div>
+            <span className="stat-label">Budget</span>
+            <strong className={summary.ratio > 1 ? 'text-bad' : ''}>
+              {formatMoney(summary.budget.total, currency, { compact: true })}
+            </strong>
+          </div>
+        </div>
+
         <div className="hero-foot">
           <p className="muted small">{paceText}</p>
           <div className="hero-actions">
             <button type="button" className="btn btn-primary btn-sm" onClick={() => onNavigate('scan')}>
-              <Icon name="scan" size={16} /> Scan kvittering
+              <Icon name="scan" size={16} /> Scan
             </button>
             {(!budgetSet || usingDefaultBudget) && (
               <button type="button" className="btn btn-ghost btn-sm" onClick={onOpenBudget}>
-                Sæt dit budget
+                Sæt budget
               </button>
             )}
           </div>
@@ -181,36 +163,21 @@ export function Dashboard({ monthKey, onNavigate, onOpenTransaction, onOpenBudge
       </section>
 
       <section className="mini-stats">
-        <div className="card mini-stat">
-          <span className="mini-icon teal">
-            <Icon name="calendar" size={18} />
-          </span>
-          <div>
-            <span className="stat-label">Brugt i dag</span>
-            <strong>{formatMoney(todaySpent, currency, { compact: true })}</strong>
-          </div>
+        <div className="mini-stat">
+          <span className="stat-label">Brugt i dag</span>
+          <strong>{formatMoney(todaySpent, currency, { compact: true })}</strong>
         </div>
-        <div className="card mini-stat">
-          <span className="mini-icon amber">
-            <Icon name="receipt" size={18} />
-          </span>
-          <div>
-            <span className="stat-label">Største udgift</span>
-            <strong>{summary.largest ? formatMoney(summary.largest.amount, currency, { compact: true }) : '–'}</strong>
-            <span className="muted tiny">{summary.largest ? summary.largest.merchant : 'Ingen endnu'}</span>
-          </div>
+        <div className="mini-stat">
+          <span className="stat-label">Største udgift</span>
+          <strong>{summary.largest ? formatMoney(summary.largest.amount, currency, { compact: true }) : '–'}</strong>
+          <span className="muted tiny">{summary.largest ? summary.largest.merchant : 'Ingen endnu'}</span>
         </div>
-        <div className="card mini-stat">
-          <span className="mini-icon violet">
-            <Icon name="tag" size={18} />
+        <div className="mini-stat">
+          <span className="stat-label">Mest brugt på</span>
+          <strong>{topCategory ? topCategory.category.name : '–'}</strong>
+          <span className="muted tiny">
+            {topCategory ? formatMoney(topCategory.spent, currency, { compact: true }) : 'Ingen endnu'}
           </span>
-          <div>
-            <span className="stat-label">Mest brugt på</span>
-            <strong>{topCategory ? topCategory.category.name : '–'}</strong>
-            <span className="muted tiny">
-              {topCategory ? formatMoney(topCategory.spent, currency, { compact: true }) : 'Ingen endnu'}
-            </span>
-          </div>
         </div>
       </section>
 
@@ -221,7 +188,7 @@ export function Dashboard({ monthKey, onNavigate, onOpenTransaction, onOpenBudge
               <h3>Faste udgifter</h3>
               <p className="muted small">
                 {recurring.length} udgifter går igen hver måned
-                {budgetSet && ` — ca. ${formatPercent(recurringTotal / Math.max(1, summary.budget.total))} af budgettet`}
+                {budgetSet && ` · ca. ${formatPercent(recurringTotal / Math.max(1, summary.budget.total))} af budgettet`}
               </p>
             </div>
             <span className="badge badge-accent">{formatMoney(recurringTotal, currency, { compact: true })} / md.</span>
@@ -248,7 +215,7 @@ export function Dashboard({ monthKey, onNavigate, onOpenTransaction, onOpenBudge
           <header className="card-head">
             <h3>Kategorier</h3>
             <button type="button" className="link-btn" onClick={onOpenBudget}>
-              Rediger budget
+              Rediger
             </button>
           </header>
 
@@ -323,28 +290,6 @@ export function Dashboard({ monthKey, onNavigate, onOpenTransaction, onOpenBudge
           )}
         </section>
       </div>
-
-      <section className="card tip-card">
-        <span className="mini-icon teal">
-          <Icon name="sparkles" size={18} />
-        </span>
-        <div>
-          <h3>Vidste du?</h3>
-          <p className="muted small">
-            Du kan tage et billede af kvitteringen direkte med kameraet. Alt sker på din egen enhed —
-            billederne bliver aldrig sendt til en server.
-          </p>
-        </div>
-        <button type="button" className="btn btn-ghost btn-sm" onClick={() => onNavigate('scan')}>
-          Prøv nu <Icon name="arrowRight" size={16} />
-        </button>
-      </section>
-
-      {summary.categories.length > 0 && (
-        <p className="footnote">
-          <CategoryChip id={summary.categories[0].category.id} subtle /> er din største post i denne måned.
-        </p>
-      )}
     </div>
   );
 }

@@ -9,37 +9,21 @@ import sharp from 'sharp';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const res = join(root, 'android/app/src/main/res');
-const brand = '#0b1220';
+const brand = '#0b7bf0';
 
 /** Kvitterings-symbolet uden baggrund (bruges til adaptive ikoner og splash). */
 const glyphSvg = (size) => `
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="${size}" height="${size}">
-  <defs>
-    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#2dd4bf"/>
-      <stop offset="0.55" stop-color="#0891b2"/>
-      <stop offset="1" stop-color="#6366f1"/>
-    </linearGradient>
-  </defs>
-  <path d="M150 96h196a40 40 0 0 1 40 40v244l-46-28-46 28-46-28-46 28-52-28V136a40 40 0 0 1 40-40z" fill="url(#g)"/>
-  <path d="M186 186h132M186 240h132M186 294h74" stroke="#04211f" stroke-width="24" stroke-linecap="round" opacity="0.85"/>
+  <path d="M164 116h184a28 28 0 0 1 28 28v256l-40-24-40 24-40-24-40 24-40-24-40 24V144a28 28 0 0 1 28-28z" fill="#ffffff"/>
+  <path d="M196 192h120M196 234h120M196 276h72" stroke="${brand}" stroke-width="20" stroke-linecap="round" opacity="0.92"/>
 </svg>`;
 
 /** Ikon med mørk baggrund (legacy launcher-ikon). */
 const iconSvg = (size, radius = 116) => `
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="${size}" height="${size}">
-  <defs>
-    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#2dd4bf"/>
-      <stop offset="0.55" stop-color="#0891b2"/>
-      <stop offset="1" stop-color="#6366f1"/>
-    </linearGradient>
-  </defs>
   <rect width="512" height="512" rx="${radius}" fill="${brand}"/>
-  <g transform="translate(64 64) scale(0.75)">
-    <path d="M150 96h196a40 40 0 0 1 40 40v244l-46-28-46 28-46-28-46 28-52-28V136a40 40 0 0 1 40-40z" fill="url(#g)"/>
-    <path d="M186 186h132M186 240h132M186 294h74" stroke="#04211f" stroke-width="24" stroke-linecap="round" opacity="0.85"/>
-  </g>
+  <path d="M164 116h184a28 28 0 0 1 28 28v256l-40-24-40 24-40-24-40 24-40-24-40 24V144a28 28 0 0 1 28-28z" fill="#ffffff"/>
+  <path d="M196 192h120M196 234h120M196 276h72" stroke="${brand}" stroke-width="20" stroke-linecap="round" opacity="0.92"/>
 </svg>`;
 
 const DENSITIES = [
@@ -125,9 +109,9 @@ async function main() {
 <resources>
     <color name="ic_launcher_background">${brand}</color>
     <color name="splash_background">${brand}</color>
-    <color name="colorPrimary">#0d9488</color>
+    <color name="colorPrimary">#0b7bf0</color>
     <color name="colorPrimaryDark">${brand}</color>
-    <color name="colorAccent">#2dd4bf</color>
+    <color name="colorAccent">#4d9dff</color>
 </resources>
 `,
   );

@@ -47,6 +47,7 @@ export function Modal({ open, onClose, title, subtitle, children, footer, size =
         aria-label={title}
         ref={panelRef}
       >
+        <div className="sheet-grabber" aria-hidden="true" />
         <header className="modal-head">
           <div>
             <h2>{title}</h2>
