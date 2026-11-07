@@ -10,14 +10,22 @@
     "preview": "vite preview --host 0.0.0.0",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
-    "postinstall": "node scripts/setup-ocr.mjs"
+    "postinstall": "node scripts/setup-ocr.mjs",
+    "android:sync": "npm run build && npx cap sync android",
+    "android:assets": "node scripts/generate-android-assets.mjs",
+    "android:apk": "cd android && ./gradlew assembleDebug",
+    "android:open": "npx cap open android"
   },
   "dependencies": {
+    "@capacitor/android": "^6.2.3",
+    "@capacitor/app": "^6.0.3",
+    "@capacitor/core": "^6.2.3",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "tesseract.js": "^5.1.1"
   },
   "devDependencies": {
+    "@capacitor/cli": "^6.2.3",
     "@tesseract.js-data/dan": "^1.0.0",
     "@testing-library/dom": "^10.4.2",
     "@testing-library/react": "^16.3.3",
@@ -25,6 +33,7 @@
     "@types/react-dom": "^18.3.1",
     "@vitejs/plugin-react": "^4.3.3",
     "jsdom": "^31.0.0",
+    "sharp": "^0.35.5",
     "typescript": "^5.6.3",
     "vite": "^5.4.10",
     "vitest": "^2.1.4"
