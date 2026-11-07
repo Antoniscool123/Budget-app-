@@ -4,7 +4,9 @@
  * bedre genkendelse af tal.
  */
 
-const MAX_OCR_WIDTH = 1800;
+const MAX_OCR_WIDTH = 1600;
+/** Lange boner må ikke blive enorme — genkendelsen skalerer med antal pixels. */
+const MAX_OCR_HEIGHT = 2800;
 
 async function loadBitmap(source: Blob): Promise<ImageBitmap | HTMLImageElement> {
   if (typeof createImageBitmap === 'function') {
@@ -25,10 +27,10 @@ async function loadBitmap(source: Blob): Promise<ImageBitmap | HTMLImageElement>
   }
 }
 
-function drawToCanvas(source: ImageBitmap | HTMLImageElement, maxWidth: number) {
+function drawToCanvas(source: ImageBitmap | HTMLImageElement, maxWidth: number, maxHeight = Infinity) {
   const width = 'width' in source ? source.width : 0;
   const height = 'height' in source ? source.height : 0;
-  const scale = Math.min(1, maxWidth / Math.max(1, width));
+  const scale = Math.min(1, maxWidth / Math.max(1, width), maxHeight / Math.max(1, height));
   const canvas = document.createElement('canvas');
   canvas.width = Math.max(1, Math.round(width * scale));
   canvas.height = Math.max(1, Math.round(height * scale));
@@ -50,8 +52,8 @@ export interface PreparedImage {
 
 export async function prepareImage(source: Blob): Promise<PreparedImage> {
   const bitmap = await loadBitmap(source);
-  const canvas = drawToCanvas(bitmap, MAX_OCR_WIDTH);
-  const thumbCanvas = drawToCanvas(bitmap, 520);
+  const canvas = drawToCanvas(bitmap, MAX_OCR_WIDTH, MAX_OCR_HEIGHT);
+  const thumbCanvas = drawToCanvas(bitmap, 520, 900);
 
   const ctx = canvas.getContext('2d');
   if (!ctx) throw new Error('Canvas understøttes ikke i denne browser');
@@ -126,5 +128,26 @@ export async function rotateImage(dataUrl: string, degrees = 90): Promise<string
   ctx.translate(canvas.width / 2, canvas.height / 2);
   ctx.rotate(radians);
   ctx.drawImage(image, -image.width / 2, -image.height / 2);
+  return canvas.toDataURL('image/jpeg', 0.94);
+}
+
+/** Beskærer en lodret del af billedet (0–1) — bruges til en hurtigere ekstra læsning. */
+export async function cropImage(dataUrl: string, fromRatio: number, toRatio = 1): Promise<string> {
+  const image = new Image();
+  image.src = dataUrl;
+  try {
+    await image.decode();
+  } catch {
+    return dataUrl;
+  }
+  const top = Math.max(0, Math.floor(image.height * fromRatio));
+  const bottom = Math.min(image.height, Math.ceil(image.height * toRatio));
+  const height = Math.max(1, bottom - top);
+  const canvas = document.createElement('canvas');
+  canvas.width = image.width;
+  canvas.height = height;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return dataUrl;
+  ctx.drawImage(image, 0, top, image.width, height, 0, 0, image.width, height);
   return canvas.toDataURL('image/jpeg', 0.94);
 }
