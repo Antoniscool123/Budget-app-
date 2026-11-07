@@ -47,13 +47,9 @@ for (const [from, to] of files) {
 // reserve, hvis en platform foretrækker den.
 const gzPath = join(tessdataDir, 'dan.traineddata.gz');
 const plainPath = join(tesseractDir, 'dan.traineddata');
-// Samme fil under et .wasm-navn: Android-WebView'en leverer .wasm-filer med en
-// kendt MIME-type, så vi altid har en vej til sprogmodellen.
-const wasmAliasPath = join(tesseractDir, 'dan.traineddata.wasm');
 if (existsSync(gzPath) && (!existsSync(plainPath) || statSync(plainPath).size < 100000)) {
   const model = gunzipSync(readFileSync(gzPath));
   writeFileSync(plainPath, model);
-  writeFileSync(wasmAliasPath, model);
   copied += 1;
 }
 

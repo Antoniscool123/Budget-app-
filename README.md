@@ -212,9 +212,10 @@ src/
 npm test
 ```
 
-47 tests dækker talformat, kvitteringsparsing (dansk, engelsk, tusindtal, manglende total,
+55 tests dækker talformat, kvitteringsparsing (dansk, engelsk, tusindtal, manglende total,
 datoformater, kategori), budgetmatematik, månedsarv, faste udgifter, dubletter,
-kategorihukommelse, indsigter og hele UI-flowet (onboarding, budget, manuel indtastning, "Gem & ny",
+kategorihukommelse, indsigter, at OCR-motoren startes med sproget som navn
+(og sprogmodellen i Tesseracts cache), og hele UI-flowet (onboarding, budget, manuel indtastning, "Gem & ny",
 dato-hurtigvalg, indstillinger, historik) i jsdom.
 
 ---

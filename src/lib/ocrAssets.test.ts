@@ -13,7 +13,6 @@ describe('OCR-filer', () => {
   const files = [
     'tesseract/worker.min.js',
     'tesseract/dan.traineddata',
-    'tesseract/dan.traineddata.wasm',
     'tesseract/tesseract-core-simd-lstm.wasm.js',
     'tesseract/tesseract-core-simd-lstm.wasm',
     'tesseract/tesseract-core-lstm.wasm.js',
