@@ -40,6 +40,19 @@ export interface Transaction {
   createdAt: string;
 }
 
+export interface RecurringExpense {
+  /** Normaliseret butiksnavn — bruges som nøgle. */
+  key: string;
+  merchant: string;
+  category: CategoryId;
+  /** Typisk beløb pr. måned. */
+  averageAmount: number;
+  /** Måneder (YYYY-MM) udgiften er set i. */
+  months: string[];
+  lastDate: string;
+  count: number;
+}
+
 export interface MonthBudget {
   /** Samlet beløb til rådighed i måneden. */
   total: number;
@@ -58,6 +71,8 @@ export interface AppState {
   transactions: Transaction[];
   /** Nøgle er måned på formen YYYY-MM. */
   budgets: Record<string, MonthBudget>;
+  /** Butik (normaliseret) → kategori, så appen husker dine valg. */
+  merchantCategories: Record<string, CategoryId>;
   settings: Settings;
 }
 

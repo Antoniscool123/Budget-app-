@@ -1,10 +1,11 @@
 import type { Tab, Transaction } from '../types';
 import { useStore } from '../store/StoreProvider';
 import { summarizeMonth, transactionsInMonth } from '../lib/budget';
+import { detectRecurring, monthlyTotal } from '../lib/recurring';
 import { formatMoney, formatPercent, formatRelativeDay } from '../lib/format';
 import { currentMonthKey, monthLabel, monthProgress, todayISO } from '../lib/dates';
 import { ProgressRing } from '../components/ui/ProgressRing';
-import { CategoryChip } from '../components/ui/CategoryChip';
+import { CategoryChip, CategoryAvatar } from '../components/ui/CategoryChip';
 import { ReceiptThumb } from '../components/ReceiptThumb';
 import { Icon } from '../components/Icon';
 import { getCategory } from '../data/categories';
@@ -35,6 +36,8 @@ export function Dashboard({ monthKey, onNavigate, onOpenTransaction, onOpenBudge
     .reduce((sum, txn) => sum + txn.amount, 0);
 
   const recent = transactionsInMonth(state.transactions, monthKey).slice(0, 6);
+  const recurring = hasAnyData ? detectRecurring(state.transactions, monthKey) : [];
+  const recurringTotal = monthlyTotal(recurring);
 
   const paceText = (() => {
     if (!budgetSet) return 'Sæt dit månedlige beløb for at få et overblik over, hvor meget du kan bruge.';
@@ -141,6 +144,18 @@ export function Dashboard({ monthKey, onNavigate, onOpenTransaction, onOpenBudge
           </div>
         </div>
 
+        {isCurrent && budgetSet && summary.daysLeft > 0 && (
+          <div className={`hero-daily ${summary.dailyAllowance < 0 ? 'bad' : ''}`}>
+            <span className="hero-daily-icon" aria-hidden="true">
+              <Icon name="clock" size={17} />
+            </span>
+            <span>
+              Du kan bruge <strong>{formatMoney(Math.max(0, summary.dailyAllowance), currency, { compact: true })}</strong> om
+              dagen de næste {summary.daysLeft} {summary.daysLeft === 1 ? 'dag' : 'dage'}
+            </span>
+          </div>
+        )}
+
         <div className="budget-bar" aria-hidden="true">
           <div className="budget-bar-fill" style={{ width: `${Math.min(100, spentPercent * 100)}%` }} />
           <div
@@ -198,6 +213,35 @@ export function Dashboard({ monthKey, onNavigate, onOpenTransaction, onOpenBudge
           </div>
         </div>
       </section>
+
+      {recurring.length >= 2 && (
+        <section className="card">
+          <header className="card-head">
+            <div>
+              <h3>Faste udgifter</h3>
+              <p className="muted small">
+                {recurring.length} udgifter går igen hver måned
+                {budgetSet && ` — ca. ${formatPercent(recurringTotal / Math.max(1, summary.budget.total))} af budgettet`}
+              </p>
+            </div>
+            <span className="badge badge-accent">{formatMoney(recurringTotal, currency, { compact: true })} / md.</span>
+          </header>
+          <ul className="recurring-list">
+            {recurring.slice(0, 6).map((item) => (
+              <li key={item.key}>
+                <CategoryAvatar id={item.category} size={34} />
+                <span className="recurring-info">
+                  <strong>{item.merchant}</strong>
+                  <span className="muted tiny">
+                    {item.months.length} mdr. · sidst {formatRelativeDay(item.lastDate)}
+                  </span>
+                </span>
+                <span className="txn-amount">{formatMoney(item.averageAmount, currency, { compact: true })}</span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       <div className="dash-columns">
         <section className="card">

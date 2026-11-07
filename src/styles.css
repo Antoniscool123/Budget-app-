@@ -2292,3 +2292,347 @@ textarea {
     transition-duration: 0.001ms !important;
   }
 }
+
+/* ==========================================================================
+   Forbedringer: onboarding, dagligt råderum, faste udgifter, dubletter m.m.
+   ========================================================================== */
+
+/* ---------- onboarding ---------- */
+
+.onboarding {
+  position: fixed;
+  inset: 0;
+  z-index: 120;
+  display: grid;
+  place-items: center;
+  padding: 18px;
+  background:
+    radial-gradient(900px 600px at 20% 0%, color-mix(in srgb, var(--accent) 18%, transparent), transparent 65%),
+    radial-gradient(700px 500px at 100% 100%, color-mix(in srgb, var(--violet) 16%, transparent), transparent 60%),
+    color-mix(in srgb, #020617 78%, transparent);
+  backdrop-filter: blur(8px);
+  animation: fadeIn 200ms ease;
+}
+
+.onboarding-card {
+  width: min(520px, 100%);
+  max-height: 90vh;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 22px;
+  border-radius: 26px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-lg);
+  animation: popIn 260ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.onboarding-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.onboarding-head .link-btn {
+  margin-left: auto;
+}
+
+.onboarding-progress {
+  display: flex;
+  gap: 6px;
+}
+.onboarding-progress span {
+  width: 26px;
+  height: 4px;
+  border-radius: 999px;
+  background: var(--track);
+  transition: background 200ms ease;
+}
+.onboarding-progress span.active {
+  background: linear-gradient(90deg, var(--accent), var(--accent-2));
+}
+
+.onboarding-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.onboarding-copy h2 {
+  font-size: 1.4rem;
+  letter-spacing: -0.025em;
+}
+
+.onboarding-amount .amount-input {
+  padding: 10px 16px;
+}
+.onboarding-amount .amount-input input {
+  font-size: 2.2rem;
+}
+
+.onboarding-presets {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.onboarding-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  justify-content: space-between;
+}
+
+.onboarding-options {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.onboarding-option {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 13px;
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  text-align: left;
+  transition: border-color 150ms ease, background 150ms ease, transform 150ms ease;
+}
+.onboarding-option:hover {
+  border-color: color-mix(in srgb, var(--accent) 40%, var(--border));
+  background: var(--surface);
+  transform: translateY(-1px);
+}
+.onboarding-option > span:nth-child(2) {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  flex: 1;
+  min-width: 0;
+}
+
+/* ---------- dagligt råderum ---------- */
+
+.hero-daily {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin-top: 18px;
+  padding: 11px 14px;
+  border-radius: 14px;
+  font-size: 0.9rem;
+  color: color-mix(in srgb, var(--accent) 78%, var(--text));
+  background: color-mix(in srgb, var(--accent) 11%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent) 22%, transparent);
+}
+.hero-daily strong {
+  font-size: 1.05rem;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+}
+.hero-daily.bad {
+  color: color-mix(in srgb, var(--bad) 76%, var(--text));
+  background: color-mix(in srgb, var(--bad) 11%, transparent);
+  border-color: color-mix(in srgb, var(--bad) 24%, transparent);
+}
+.hero-daily-icon {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
+  background: color-mix(in srgb, currentColor 16%, transparent);
+  flex: none;
+}
+
+/* ---------- faste udgifter ---------- */
+
+.recurring-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  gap: 8px 18px;
+}
+.recurring-list li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 4px;
+  border-bottom: 1px dashed color-mix(in srgb, var(--border) 75%, transparent);
+}
+.recurring-info {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+}
+.recurring-info strong {
+  font-size: 0.88rem;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ---------- dublet-advarsel ---------- */
+
+.duplicate-warning {
+  display: flex;
+  gap: 10px;
+  padding: 12px;
+  border-radius: 13px;
+  background: color-mix(in srgb, var(--warn) 13%, transparent);
+  border: 1px solid color-mix(in srgb, var(--warn) 30%, transparent);
+  color: color-mix(in srgb, var(--warn) 55%, var(--text));
+  font-size: 0.84rem;
+}
+.duplicate-warning > div {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.duplicate-warning .row-wrap {
+  margin-top: 6px;
+}
+
+.retry-row {
+  margin-top: 10px;
+}
+
+/* ---------- budget-trin ---------- */
+
+.step-buttons {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 4px;
+}
+.step-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 58px;
+  justify-content: center;
+  padding: 8px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  font-size: 0.84rem;
+  font-weight: 600;
+  color: var(--text-soft);
+  font-variant-numeric: tabular-nums;
+  transition: border-color 140ms ease, background 140ms ease;
+}
+.step-btn:hover {
+  border-color: var(--border-strong);
+  background: var(--surface);
+}
+.step-btn.wide {
+  margin-left: auto;
+  min-width: 0;
+}
+
+/* ---------- historik-søgning ---------- */
+
+.history-search-row {
+  display: flex;
+  gap: 8px;
+  align-items: stretch;
+}
+.history-search-row .search {
+  flex: 1;
+  min-width: 0;
+}
+.search-scope {
+  flex: none;
+  white-space: nowrap;
+}
+
+/* ---------- indstillinger: lagerplads ---------- */
+
+.storage-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 12px;
+  border-radius: 11px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+}
+.storage-info .bar {
+  margin-top: 2px;
+}
+.shortcuts {
+  margin-top: 4px;
+}
+
+/* ---------- større trykflader på touch ---------- */
+
+@media (hover: none) {
+  .icon-btn {
+    width: 40px;
+    height: 40px;
+  }
+  .filter-chip,
+  .preset,
+  .step-btn {
+    min-height: 38px;
+  }
+  .txn-row {
+    padding: 12px 8px;
+  }
+  .side-nav button {
+    padding: 13px 12px;
+  }
+}
+
+@media (max-width: 680px) {
+  .onboarding-card {
+    padding: 18px;
+    border-radius: 22px;
+  }
+  .onboarding-amount .amount-input input {
+    font-size: 1.9rem;
+  }
+  .hero-daily {
+    font-size: 0.84rem;
+  }
+  .recurring-list {
+    grid-template-columns: 1fr;
+  }
+  .step-btn.wide {
+    margin-left: 0;
+    width: 100%;
+  }
+  .history-search-row {
+    flex-direction: column;
+  }
+}
+
+/* ---------- tips i dropzonen ---------- */
+
+.dropzone-tips {
+  list-style: none;
+  display: flex;
+  gap: 6px 16px;
+  flex-wrap: wrap;
+  justify-content: center;
+  padding: 0;
+  margin: 10px 0 0;
+  font-size: 0.76rem;
+  color: var(--muted);
+}
+.dropzone-tips li {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.dropzone-tips li::before {
+  content: '✓';
+  color: color-mix(in srgb, var(--accent) 85%, var(--text));
+  font-weight: 700;
+}

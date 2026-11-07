@@ -1,9 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { CategoryId, ParsedReceipt, ReceiptItem } from '../types';
 import { CATEGORIES, getCategory } from '../data/categories';
-import { prepareImage } from '../lib/image';
+import { prepareImage, rotateImage } from '../lib/image';
 import { runOcr, prewarmOcr, type OcrProgress } from '../lib/ocr';
 import { parseReceipt } from '../lib/receiptParser';
+import { rememberedCategory } from '../lib/merchants';
+import { findDuplicate } from '../lib/duplicates';
+import type { Transaction } from '../types';
 import { formatMoney, formatRelativeDay, parseAmountString } from '../lib/format';
 import { todayISO } from '../lib/dates';
 import { useStore } from '../store/StoreProvider';
@@ -16,6 +19,8 @@ type ScanPhase = 'idle' | 'processing' | 'review' | 'error';
 interface ReviewState {
   previewUrl: string;
   thumbnail: string;
+  /** Det forbedrede billede OCR'en kørte på — bruges til genlæsning. */
+  ocrDataUrl: string;
   parsed: ParsedReceipt;
   ocrText: string;
   ocrConfidence: number;
@@ -40,7 +45,7 @@ const EMPTY_FORM: FormState = {
 };
 
 export function ScanPage({ onManualEntry }: { onManualEntry: () => void }) {
-  const { state, addTransaction, deleteTransaction, loadDemoData } = useStore();
+  const { state, addTransaction, deleteTransaction, loadDemoData, rememberMerchantCategory } = useStore();
   const { showToast } = useToast();
   const currency = state.settings.currency;
 
@@ -53,6 +58,8 @@ export function ScanPage({ onManualEntry }: { onManualEntry: () => void }) {
   const [dragging, setDragging] = useState(false);
   const [saving, setSaving] = useState(false);
   const [previewUrl, setPreviewUrl] = useState('');
+  const [rerunning, setRerunning] = useState(false);
+  const [duplicate, setDuplicate] = useState<Transaction | null>(null);
 
   const cameraRef = useRef<HTMLInputElement>(null);
   const uploadRef = useRef<HTMLInputElement>(null);
@@ -79,6 +86,7 @@ export function ScanPage({ onManualEntry }: { onManualEntry: () => void }) {
     setError('');
     setShowRaw(false);
     setPreviewUrl('');
+    setDuplicate(null);
   }, []);
 
   const startScan = useCallback(
@@ -125,9 +133,22 @@ export function ScanPage({ onManualEntry }: { onManualEntry: () => void }) {
           }
         }
         if (abortRef.current) return;
+
+        // Har brugeren tidligere valgt en kategori for butikken, bruger vi den.
+        const remembered = rememberedCategory(state, parsed.merchant);
+        if (remembered && remembered !== parsed.category) {
+          parsed = {
+            ...parsed,
+            category: remembered,
+            signals: [...parsed.signals, 'brugte din kategori for butikken'],
+            confidence: Math.min(0.98, parsed.confidence + 0.04),
+          };
+        }
+
         setReview({
           previewUrl: objectUrl,
           thumbnail: prepared.thumbnailDataUrl,
+          ocrDataUrl: prepared.ocrDataUrl,
           parsed,
           ocrText,
           ocrConfidence,
@@ -196,13 +217,27 @@ export function ScanPage({ onManualEntry }: { onManualEntry: () => void }) {
     }
   }, [loadDemoData, reset, startScan, showToast, state.transactions.length]);
 
-  const save = useCallback(async () => {
-    const amount = parseAmountString(form.amount);
-    if (!amount || amount <= 0) {
-      showToast('Indtast et beløb større end 0', { tone: 'error' });
-      return;
-    }
-    setSaving(true);
+  const save = useCallback(
+    async (force = false) => {
+      const amount = parseAmountString(form.amount);
+      if (!amount || amount <= 0) {
+        showToast('Indtast et beløb større end 0', { tone: 'error' });
+        return;
+      }
+
+      if (!force) {
+        const existing = findDuplicate(state.transactions, {
+          amount: Math.round(amount * 100) / 100,
+          merchant: form.merchant.trim() || 'Ukendt butik',
+          date: form.date || todayISO(),
+        });
+        if (existing) {
+          setDuplicate(existing);
+          return;
+        }
+      }
+      setDuplicate(null);
+      setSaving(true);
     try {
       const transaction = await addTransaction({
         amount: Math.round(amount * 100) / 100,
@@ -214,6 +249,7 @@ export function ScanPage({ onManualEntry }: { onManualEntry: () => void }) {
         source: 'scan',
         image: review?.thumbnail,
       });
+      rememberMerchantCategory(transaction.merchant, transaction.category);
       showToast(`${formatMoney(transaction.amount, currency)} gemt fra ${transaction.merchant}`, {
         tone: 'success',
         action: {
@@ -227,7 +263,58 @@ export function ScanPage({ onManualEntry }: { onManualEntry: () => void }) {
     } finally {
       setSaving(false);
     }
-  }, [addTransaction, currency, deleteTransaction, form, reset, review, showToast]);
+    },
+    [
+      addTransaction,
+      currency,
+      deleteTransaction,
+      form,
+      rememberMerchantCategory,
+      reset,
+      review,
+      showToast,
+      state.transactions,
+    ],
+  );
+
+  /** Kør OCR igen på samme billede — evt. roteret 90°. */
+  const rerun = useCallback(
+    async (rotate: boolean) => {
+      if (!review || rerunning) return;
+      setRerunning(true);
+      setDuplicate(null);
+      try {
+        const dataUrl = rotate ? await rotateImage(review.ocrDataUrl, 90) : review.ocrDataUrl;
+        setProgress({ stage: 'recognize', progress: 0.4, message: 'Læser kvitteringen igen' });
+        const result = await runOcr(dataUrl, (update) => setProgress(update));
+        const parsed = parseReceipt(result.text);
+        setReview({
+          ...review,
+          ocrDataUrl: dataUrl,
+          previewUrl: rotate ? dataUrl : review.previewUrl,
+          parsed,
+          ocrText: result.text,
+          ocrConfidence: result.confidence,
+        });
+        setForm((prev) => ({
+          ...prev,
+          amount: parsed.amount !== undefined ? String(parsed.amount.toFixed(2)).replace('.', ',') : prev.amount,
+          merchant: parsed.merchant ?? prev.merchant,
+          date: parsed.date ?? prev.date,
+          category: rememberedCategory(state, parsed.merchant ?? prev.merchant) ?? parsed.category ?? prev.category,
+          items: parsed.items.length > 0 ? parsed.items : prev.items,
+        }));
+        showToast(parsed.amount !== undefined ? 'Kvitteringen er læst igen' : 'Fandt stadig ikke et beløb', {
+          tone: parsed.amount !== undefined ? 'success' : 'info',
+        });
+      } catch {
+        showToast('Kunne ikke læse kvitteringen igen', { tone: 'error' });
+      } finally {
+        setRerunning(false);
+      }
+    },
+    [rememberMerchantCategory, rerunning, review, showToast, state],
+  );
 
   const updateForm = <K extends keyof FormState>(key: K, value: FormState[K]) => {
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -277,6 +364,11 @@ export function ScanPage({ onManualEntry }: { onManualEntry: () => void }) {
             </div>
             <h3>Slip billedet her</h3>
             <p className="muted small">eller vælg en fil — jpg, png eller webp</p>
+            <ul className="dropzone-tips">
+              <li>Hold bonen flad og fyld hele billedet</li>
+              <li>Godt lys — undgå skygger</li>
+              <li>Alle beløb med, så totalen kan findes</li>
+            </ul>
             <div className="dropzone-actions">
               <button
                 type="button"
@@ -424,6 +516,14 @@ export function ScanPage({ onManualEntry }: { onManualEntry: () => void }) {
                 </span>
               </div>
             </div>
+            <div className="row-wrap retry-row">
+              <button type="button" className="btn btn-ghost btn-sm" onClick={() => rerun(false)} disabled={rerunning}>
+                <Icon name="scan" size={15} /> {rerunning ? 'Læser …' : 'Læs igen'}
+              </button>
+              <button type="button" className="btn btn-ghost btn-sm" onClick={() => rerun(true)} disabled={rerunning}>
+                <Icon name="arrowRight" size={15} /> Rotér & læs
+              </button>
+            </div>
             <button type="button" className="link-btn" onClick={() => setShowRaw((value) => !value)}>
               {showRaw ? 'Skjul' : 'Vis'} den rå OCR-tekst
             </button>
@@ -539,8 +639,29 @@ export function ScanPage({ onManualEntry }: { onManualEntry: () => void }) {
               />
             </label>
 
+            {duplicate && (
+              <div className="duplicate-warning" role="alert">
+                <Icon name="alert" size={17} />
+                <div>
+                  <strong>Det ligner en dublet</strong>
+                  <p className="muted tiny">
+                    Du har allerede {formatMoney(duplicate.amount, currency)} fra {duplicate.merchant} den{' '}
+                    {formatRelativeDay(duplicate.date)}.
+                  </p>
+                  <div className="row-wrap">
+                    <button type="button" className="btn btn-primary btn-sm" onClick={() => save(true)}>
+                      Gem alligevel
+                    </button>
+                    <button type="button" className="btn btn-ghost btn-sm" onClick={() => setDuplicate(null)}>
+                      Fortryd
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
             <div className="review-actions">
-              <button type="button" className="btn btn-primary btn-lg" onClick={save} disabled={saving}>
+              <button type="button" className="btn btn-primary btn-lg" onClick={() => save()} disabled={saving}>
                 <Icon name="check" size={18} /> {saving ? 'Gemmer …' : 'Gem udgift'}
               </button>
               <button type="button" className="btn btn-ghost" onClick={reset}>

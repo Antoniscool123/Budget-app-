@@ -5,6 +5,9 @@ import { useStore } from '../store/StoreProvider';
 import { useToast } from '../store/ToastProvider';
 import { formatMoney, parseAmountString } from '../lib/format';
 import { todayISO } from '../lib/dates';
+import { topMerchants } from '../lib/merchants';
+import { findDuplicate } from '../lib/duplicates';
+import { formatRelativeDay } from '../lib/format';
 import { Modal } from './ui/Modal';
 import { Icon } from './Icon';
 
@@ -33,14 +36,17 @@ const emptyForm = (): FormState => ({
 });
 
 export function TransactionModal({ open, transaction, onClose }: TransactionModalProps) {
-  const { state, addTransaction, updateTransaction, deleteTransaction } = useStore();
+  const { state, addTransaction, updateTransaction, deleteTransaction, rememberMerchantCategory } = useStore();
   const { showToast } = useToast();
   const currency = state.settings.currency;
   const [form, setForm] = useState<FormState>(emptyForm());
+  const [duplicate, setDuplicate] = useState<Transaction | null>(null);
   const isEdit = Boolean(transaction);
+  const suggestions = transaction ? [] : topMerchants(state.transactions, 6);
 
   useEffect(() => {
     if (!open) return;
+    setDuplicate(null);
     if (transaction) {
       setForm({
         amount: String(transaction.amount).replace('.', ','),
@@ -58,7 +64,7 @@ export function TransactionModal({ open, transaction, onClose }: TransactionModa
   const update = <K extends keyof FormState>(key: K, value: FormState[K]) =>
     setForm((prev) => ({ ...prev, [key]: value }));
 
-  const submit = async () => {
+  const submit = async (force = false) => {
     const amount = parseAmountString(form.amount);
     if (!amount || amount <= 0) {
       showToast('Indtast et beløb større end 0', { tone: 'error' });
@@ -68,6 +74,19 @@ export function TransactionModal({ open, transaction, onClose }: TransactionModa
       showToast('Skriv hvilken butik udgiften er fra', { tone: 'error' });
       return;
     }
+
+    if (!force && !isEdit) {
+      const existing = findDuplicate(state.transactions, {
+        amount: Math.round(amount * 100) / 100,
+        merchant: form.merchant.trim(),
+        date: form.date || todayISO(),
+      });
+      if (existing) {
+        setDuplicate(existing);
+        return;
+      }
+    }
+    setDuplicate(null);
 
     const payload = {
       amount: Math.round(amount * 100) / 100,
@@ -85,6 +104,7 @@ export function TransactionModal({ open, transaction, onClose }: TransactionModa
       await addTransaction({ ...payload, source: 'manual' });
       showToast(`${formatMoney(payload.amount, currency)} fra ${payload.merchant} gemt`);
     }
+    rememberMerchantCategory(payload.merchant, payload.category);
     onClose();
   };
 
@@ -131,7 +151,7 @@ export function TransactionModal({ open, transaction, onClose }: TransactionModa
             <button type="button" className="btn btn-ghost" onClick={onClose}>
               Annullér
             </button>
-            <button type="button" className="btn btn-primary" onClick={submit}>
+            <button type="button" className="btn btn-primary" onClick={() => submit()}>
               <Icon name="check" size={17} /> {isEdit ? 'Gem ændringer' : 'Gem udgift'}
             </button>
           </div>
@@ -151,6 +171,27 @@ export function TransactionModal({ open, transaction, onClose }: TransactionModa
           />
         </div>
       </label>
+
+      {suggestions.length > 0 && (
+        <div className="field">
+          <span>Hurtigt valg</span>
+          <div className="filter-row">
+            {suggestions.map((suggestion) => (
+              <button
+                key={suggestion.merchant}
+                type="button"
+                className={`filter-chip ${form.merchant === suggestion.merchant ? 'active' : ''}`}
+                onClick={() => {
+                  update('merchant', suggestion.merchant);
+                  update('category', suggestion.category);
+                }}
+              >
+                {suggestion.merchant}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="field-row">
         <label className="field">
@@ -184,6 +225,27 @@ export function TransactionModal({ open, transaction, onClose }: TransactionModa
           ))}
         </div>
       </div>
+
+      {duplicate && (
+        <div className="duplicate-warning" role="alert">
+          <Icon name="alert" size={17} />
+          <div>
+            <strong>Det ligner en dublet</strong>
+            <p className="muted tiny">
+              Du har allerede {formatMoney(duplicate.amount, currency)} fra {duplicate.merchant} den{' '}
+              {formatRelativeDay(duplicate.date)}.
+            </p>
+            <div className="row-wrap">
+              <button type="button" className="btn btn-primary btn-sm" onClick={() => submit(true)}>
+                Gem alligevel
+              </button>
+              <button type="button" className="btn btn-ghost btn-sm" onClick={() => setDuplicate(null)}>
+                Fortryd
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <label className="field">
         <span>Note (valgfri)</span>

@@ -8,7 +8,8 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import type { AppState, MonthBudget, Settings, Transaction } from '../types';
+import type { AppState, CategoryId, MonthBudget, Settings, Transaction } from '../types';
+import { normalizeMerchant } from '../lib/merchants';
 import { clearState, createInitialState, loadState, saveState } from '../lib/storage';
 import { createDemoState } from '../lib/demo';
 import { deleteImage, clearImages, saveImage } from '../lib/imageStore';
@@ -23,6 +24,8 @@ interface StoreValue {
   updateTransaction: (id: string, patch: Partial<Transaction>, image?: string) => Promise<void>;
   deleteTransaction: (id: string) => Promise<void>;
   setBudget: (monthKey: string, budget: MonthBudget) => void;
+  applyBudgetToMonths: (months: string[], budget: MonthBudget) => void;
+  rememberMerchantCategory: (merchant: string, category: CategoryId) => void;
   updateSettings: (patch: Partial<Settings>) => void;
   loadDemoData: () => void;
   importState: (incoming: Partial<AppState>) => boolean;
@@ -89,6 +92,23 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     }));
   }, []);
 
+  const applyBudgetToMonths = useCallback<StoreValue['applyBudgetToMonths']>((months, budget) => {
+    setState((prev) => {
+      const next = { ...prev.budgets };
+      for (const month of months) next[month] = { total: budget.total, categories: { ...budget.categories } };
+      return { ...prev, budgets: next };
+    });
+  }, []);
+
+  const rememberMerchantCategory = useCallback<StoreValue['rememberMerchantCategory']>((merchant, category) => {
+    const key = normalizeMerchant(merchant);
+    if (!key) return;
+    setState((prev) => {
+      if (prev.merchantCategories[key] === category) return prev;
+      return { ...prev, merchantCategories: { ...prev.merchantCategories, [key]: category } };
+    });
+  }, []);
+
   const updateSettings = useCallback<StoreValue['updateSettings']>((patch) => {
     setState((prev) => ({ ...prev, settings: { ...prev.settings, ...patch } }));
   }, []);
@@ -109,6 +129,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       ...incoming,
       settings: { ...base.settings, ...(incoming.settings ?? {}) },
       budgets: incoming.budgets ?? {},
+      merchantCategories: incoming.merchantCategories ?? {},
       transactions: incoming.transactions,
     };
     setState(next);
@@ -146,12 +167,26 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       updateTransaction,
       deleteTransaction,
       setBudget,
+      applyBudgetToMonths,
+      rememberMerchantCategory,
       updateSettings,
       loadDemoData,
       importState,
       resetAll,
     }),
-    [state, addTransaction, updateTransaction, deleteTransaction, setBudget, updateSettings, loadDemoData, importState, resetAll],
+    [
+      state,
+      addTransaction,
+      updateTransaction,
+      deleteTransaction,
+      setBudget,
+      applyBudgetToMonths,
+      rememberMerchantCategory,
+      updateSettings,
+      loadDemoData,
+      importState,
+      resetAll,
+    ],
   );
 
   return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>;

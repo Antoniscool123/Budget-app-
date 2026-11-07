@@ -83,10 +83,12 @@ export function formatDate(iso: string): string {
 
 export function formatDateLong(iso: string): string {
   const date = new Date(`${iso}T12:00:00`);
+  const sameYear = date.getFullYear() === new Date().getFullYear();
   return new Intl.DateTimeFormat('da-DK', {
     weekday: 'long',
     day: 'numeric',
     month: 'long',
+    ...(sameYear ? {} : { year: 'numeric' }),
   }).format(date);
 }
 

@@ -13,7 +13,7 @@ const PRESETS = [5000, 8000, 10000, 15000];
 const MAX_TOTAL = 40000;
 
 export function BudgetPage({ monthKey }: { monthKey: string }) {
-  const { state, setBudget } = useStore();
+  const { state, setBudget, applyBudgetToMonths } = useStore();
   const { showToast } = useToast();
   const currency = state.settings.currency;
   const summary = summarizeMonth(state, monthKey);
@@ -40,6 +40,18 @@ export function BudgetPage({ monthKey }: { monthKey: string }) {
     setTotalInput(raw);
     const value = parseAmountString(raw) ?? 0;
     commit({ ...budget, total: Math.max(0, value) });
+  };
+
+  const stepTotal = (delta: number) => {
+    const next = Math.max(0, budget.total + delta);
+    setTotalInput(String(next));
+    commit({ ...budget, total: next });
+  };
+
+  const applyToFuture = () => {
+    const months = Array.from({ length: 6 }, (_, index) => addMonths(monthKey, index));
+    applyBudgetToMonths(months, budget);
+    showToast(`Budget anvendt på ${monthLabel(months[0], 'short')} – ${monthLabel(months[5], 'short')}`);
   };
 
   const applyPreset = (value: number) => {
@@ -124,6 +136,18 @@ export function BudgetPage({ monthKey }: { monthKey: string }) {
         <div className="row-between tiny muted">
           <span>0 kr</span>
           <span>{formatNumber(MAX_TOTAL)} kr</span>
+        </div>
+
+        <div className="step-buttons" role="group" aria-label="Justér beløb">
+          {[-500, -100, 100, 500].map((delta) => (
+            <button key={delta} type="button" className="step-btn" onClick={() => stepTotal(delta)}>
+              {delta > 0 ? '+' : '−'}
+              {formatNumber(Math.abs(delta))}
+            </button>
+          ))}
+          <button type="button" className="step-btn wide" onClick={applyToFuture}>
+            <Icon name="copy" size={14} /> Brug også de næste 6 måneder
+          </button>
         </div>
 
         <div className="preset-row">
