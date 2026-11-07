@@ -1,4 +1,5 @@
 import { createWorker, PSM, type Worker } from 'tesseract.js';
+import { set as idbSet } from 'idb-keyval';
 
 /**
  * OCR i browseren via Tesseract.js. Motoren, sproget (dansk) og wasm-filerne
@@ -119,7 +120,6 @@ export interface LangData {
 async function fetchLangData(): Promise<LangData> {
   const candidates = [
     `${workerDir()}/dan.traineddata`,
-    `${workerDir()}/dan.traineddata.wasm`,
     `${langDir()}/dan.traineddata`,
     `${langDir()}/dan.traineddata.gz`,
   ];
@@ -147,11 +147,28 @@ async function fetchLangData(): Promise<LangData> {
   throw new Error(`Sprogmodellen kan ikke hentes: ${problems.join(', ')}`);
 }
 
+/**
+ * Lægger sprogmodellen i Tesseracts egen IndexedDB-cache, så workeren finder
+ * den dér og slet ikke behøver at hente noget over netværket.
+ *
+ * Nøglen er den Tesseract selv slår op: `${cachePath || '.'}/dan.traineddata`.
+ */
+async function primeLangCache(lang: LangData): Promise<boolean> {
+  try {
+    await idbSet(`./${lang.code}.traineddata`, lang.data);
+    addLog('Sprogmodel lagt i Tesseracts cache');
+    return true;
+  } catch (error) {
+    addLog(`Kunne ikke lægge sprogmodellen i cache: ${error instanceof Error ? error.message : 'ukendt fejl'}`);
+    return false;
+  }
+}
+
 export async function checkOcrAssets(scope: 'essential' | 'all' = 'all'): Promise<OcrAssetCheck[]> {
   const essential = [
     { name: 'worker.min.js', url: workerUrl() },
-    { name: 'dan.traineddata (worker-mappe)', url: `${workerDir()}/dan.traineddata` },
-    { name: 'dan.traineddata.gz (tessdata)', url: `${langDir()}/dan.traineddata.gz` },
+    { name: 'dan.traineddata', url: `${workerDir()}/dan.traineddata` },
+
   ];
   const targets =
     scope === 'essential'
@@ -223,12 +240,20 @@ function attemptConfigs(): OcrAttempt[] {
   ];
 }
 
+/**
+ * Sproget gives som navn ("dan"), ikke som bytes-objekt: Tesseracts
+ * `initialize` udleder sproglisten af `lang.data` og fejler, hvis man sender
+ * data med. I stedet ligger de rigtige bytes i cachen (se primeLangCache),
+ * og `langPath` er kun en reserve, hvis cachen ikke kunne skrives.
+ */
 function createOcrWorker(attempt: OcrAttempt, lang: LangData): Promise<Worker> {
-  return createWorker([{ code: lang.code, data: lang.data }], 1, {
+  return createWorker(lang.code, 1, {
     workerPath: workerUrl(),
     corePath: attempt.corePath,
+    langPath: workerDir(),
+    gzip: false,
     workerBlobURL: attempt.workerBlobURL,
-    cacheMethod: 'readwrite',
+    cacheMethod: 'write',
     logger: (message: { status?: string; progress?: number }) => {
       const stage = message.status ?? '';
       const progress = typeof message.progress === 'number' ? message.progress : 0;
@@ -278,6 +303,7 @@ async function getWorker(): Promise<Worker> {
     }
     const lang = await fetchLangData();
     addLog(`Sprogmodel klar (${lang.code}) fra ${lang.source}`);
+    await primeLangCache(lang);
 
     setStatus('warming');
 
