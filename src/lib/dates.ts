@@ -11,6 +11,13 @@ export function todayISO(): string {
   return toISODate(new Date());
 }
 
+/** Lægger et antal dage til en ISO-dato (YYYY-MM-DD). */
+export function addDaysISO(iso: string, days: number): string {
+  const date = new Date(`${iso}T12:00:00`);
+  date.setDate(date.getDate() + days);
+  return toISODate(date);
+}
+
 export function monthKeyOf(iso: string): string {
   return iso.slice(0, 7);
 }

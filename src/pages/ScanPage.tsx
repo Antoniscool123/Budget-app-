@@ -58,6 +58,9 @@ export function ScanPage({ onManualEntry }: { onManualEntry: () => void }) {
   const [dragging, setDragging] = useState(false);
   const [saving, setSaving] = useState(false);
   const [previewUrl, setPreviewUrl] = useState('');
+  /** Flere boner valgt på én gang — læses én ad gangen. */
+  const [queue, setQueue] = useState<File[]>([]);
+  const [queueIndex, setQueueIndex] = useState(0);
   const [rerunning, setRerunning] = useState(false);
   const [duplicate, setDuplicate] = useState<Transaction | null>(null);
 
@@ -87,6 +90,8 @@ export function ScanPage({ onManualEntry }: { onManualEntry: () => void }) {
     setShowRaw(false);
     setPreviewUrl('');
     setDuplicate(null);
+    setQueue([]);
+    setQueueIndex(0);
   }, []);
 
   const startScan = useCallback(
@@ -183,17 +188,25 @@ export function ScanPage({ onManualEntry }: { onManualEntry: () => void }) {
 
   const handleFiles = useCallback(
     (files: FileList | null) => {
-      const file = files?.[0];
-      if (!file) return;
-      if (!file.type.startsWith('image/') && !/\.(hei[cf]|jpe?g|png|webp)$/i.test(file.name)) {
-        showToast('Vælg venligst et billede (jpg, png eller webp)', { tone: 'error' });
-        return;
+      const list = Array.from(files ?? []);
+      if (list.length === 0) return;
+
+      const valid = list.filter((file) => {
+        const isImage = file.type.startsWith('image/') || /\.(hei[cf]|jpe?g|png|webp)$/i.test(file.name);
+        if (!isImage) showToast(`Springer ${file.name} over — det er ikke et billede`, { tone: 'info' });
+        else if (file.size > 25 * 1024 * 1024) showToast(`${file.name} er for stort (maks. 25 MB)`, { tone: 'error' });
+        return isImage && file.size <= 25 * 1024 * 1024;
+      });
+
+      const [first, ...rest] = valid;
+      if (!first) return;
+
+      setQueue(rest);
+      setQueueIndex(0);
+      if (rest.length > 0) {
+        showToast(`${valid.length} boner i kø — læser den første`, { tone: 'info' });
       }
-      if (file.size > 25 * 1024 * 1024) {
-        showToast('Billedet er for stort (maks. 25 MB)', { tone: 'error' });
-        return;
-      }
-      startScan(file);
+      startScan(first);
     },
     [showToast, startScan],
   );
@@ -259,7 +272,15 @@ export function ScanPage({ onManualEntry }: { onManualEntry: () => void }) {
           },
         },
       });
-      reset();
+      const nextFile = queue[0];
+      if (nextFile) {
+        const nextIndex = queueIndex + 1;
+        setQueueIndex(nextIndex);
+        setQueue((prev) => prev.slice(1));
+        await startScan(nextFile, `bon ${nextIndex + 1}`);
+      } else {
+        reset();
+      }
     } finally {
       setSaving(false);
     }
@@ -270,9 +291,12 @@ export function ScanPage({ onManualEntry }: { onManualEntry: () => void }) {
       deleteTransaction,
       form,
       rememberMerchantCategory,
+      queue,
+      queueIndex,
       reset,
       review,
       showToast,
+      startScan,
       state.transactions,
     ],
   );
@@ -363,7 +387,7 @@ export function ScanPage({ onManualEntry }: { onManualEntry: () => void }) {
               </div>
             </div>
             <h3>Slip billedet her</h3>
-            <p className="muted small">eller vælg en fil — jpg, png eller webp</p>
+            <p className="muted small">eller vælg en eller flere filer — jpg, png eller webp</p>
             <ul className="dropzone-tips">
               <li>Hold bonen flad og fyld hele billedet</li>
               <li>Godt lys — undgå skygger</li>
@@ -440,6 +464,7 @@ export function ScanPage({ onManualEntry }: { onManualEntry: () => void }) {
             ref={uploadRef}
             type="file"
             accept="image/*"
+            multiple
             className="visually-hidden"
             onChange={(event) => {
               handleFiles(event.target.files);
@@ -543,7 +568,14 @@ export function ScanPage({ onManualEntry }: { onManualEntry: () => void }) {
 
           <section className="card review-form">
             <header className="card-head">
-              <h3>Kontrollér og gem</h3>
+              <div>
+                <h3>Kontrollér og gem</h3>
+                {queue.length > 0 && (
+                  <p className="muted tiny">
+                    Bon {queueIndex + 1} af {queueIndex + 1 + queue.length} i køen
+                  </p>
+                )}
+              </div>
               <button type="button" className="link-btn" onClick={reset}>
                 Scan en ny
               </button>
@@ -559,6 +591,7 @@ export function ScanPage({ onManualEntry }: { onManualEntry: () => void }) {
                   placeholder="0,00"
                   onChange={(event) => updateForm('amount', event.target.value)}
                   autoComplete="off"
+                  autoFocus={!form.amount}
                 />
               </div>
             </label>

@@ -2727,3 +2727,136 @@ img {
   margin-top: 3px;
   line-height: 1.45;
 }
+
+/* ---------- indsigter ---------- */
+
+.insights {
+  display: flex;
+  flex-direction: column;
+}
+
+.insight {
+  display: flex;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 12px 0;
+  border-top: 1px solid var(--border);
+}
+.insight:first-child {
+  padding-top: 2px;
+  border-top: 0;
+}
+.insight:last-child {
+  padding-bottom: 2px;
+}
+
+.insight-icon {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  flex: none;
+  border-radius: 12px;
+  background: var(--surface-2);
+  color: var(--text-soft);
+}
+.insight-good .insight-icon {
+  background: color-mix(in srgb, var(--good) 12%, transparent);
+  color: var(--good);
+}
+.insight-warn .insight-icon {
+  background: color-mix(in srgb, var(--warn) 13%, transparent);
+  color: var(--warn);
+}
+.insight-bad .insight-icon {
+  background: color-mix(in srgb, var(--bad) 12%, transparent);
+  color: var(--bad);
+}
+.insight-neutral .insight-icon {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.insight-copy {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 170px;
+}
+.insight-copy strong {
+  font-size: 0.9rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+.insight .link-btn {
+  align-self: center;
+  flex: none;
+}
+
+/* ---------- dato-hurtigvalg ---------- */
+
+.date-chips {
+  display: flex;
+  gap: 6px;
+  margin-top: 1px;
+}
+.date-chips .filter-chip {
+  height: 32px;
+  padding: 0 12px;
+  border-radius: 16px;
+  font-size: 0.78rem;
+}
+
+/* ---------- backup-status ---------- */
+
+.backup-status {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: 16px;
+  background: var(--surface-2);
+  color: var(--text-soft);
+  font-size: 0.82rem;
+}
+.backup-status > div {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.backup-status strong {
+  font-size: 0.84rem;
+  font-weight: 600;
+}
+.backup-status.stale {
+  background: color-mix(in srgb, var(--warn) 10%, transparent);
+  color: color-mix(in srgb, var(--warn) 62%, var(--text));
+}
+
+/* ---------- spring-til-indhold ---------- */
+
+.skip-link {
+  position: absolute;
+  top: 10px;
+  left: -9999px;
+  z-index: 200;
+  padding: 10px 16px;
+  border-radius: 12px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 0.86rem;
+  font-weight: 600;
+  text-decoration: none;
+}
+.skip-link:focus {
+  left: 12px;
+}
+
+@media (max-width: 460px) {
+  .insight .link-btn {
+    margin-left: 46px;
+    align-self: flex-start;
+  }
+}

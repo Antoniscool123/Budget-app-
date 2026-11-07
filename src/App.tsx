@@ -139,6 +139,10 @@ function Shell() {
 
   return (
     <div className="app">
+      <a className="skip-link" href="#hovedindhold">
+        Spring til indhold
+      </a>
+
       <aside className="sidebar">
         <div className="brand">
           <span className="brand-mark" aria-hidden="true">
@@ -243,13 +247,17 @@ function Shell() {
           </div>
         </header>
 
-        <main className="content">
+        <main className="content" id="hovedindhold" tabIndex={-1}>
+          <p className="visually-hidden" aria-live="polite">
+            Viser {monthLabel(monthKey)}
+          </p>
           {tab === 'overblik' && (
             <Dashboard
               monthKey={monthKey}
               onNavigate={setTab}
               onOpenTransaction={openDetail}
               onOpenBudget={() => setTab('budget')}
+              onOpenSettings={() => setSettingsOpen(true)}
             />
           )}
           {tab === 'scan' && <ScanPage onManualEntry={openManual} />}

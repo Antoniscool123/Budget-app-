@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import App from './App';
 
 /** Minimal matchMedia-stub, som jsdom mangler. */
@@ -129,6 +129,45 @@ describe('App', () => {
     expect(screen.getByText(/Det ligner en dublet/i)).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: /Gem alligevel/i }));
     expect(screen.queryByText(/Det ligner en dublet/i)).toBeNull();
+  });
+
+  it('kan gemme flere udgifter i træk', async () => {
+    render(<App />);
+    skipOnboarding();
+
+    fireEvent.click(screen.getAllByRole('button', { name: /Ny udgift/i })[0]);
+    fireEvent.change(screen.getByLabelText(/Beløb/), { target: { value: '25' } });
+    fireEvent.change(screen.getByPlaceholderText('Fx Netto'), { target: { value: 'Kiosken' } });
+    fireEvent.click(screen.getByRole('button', { name: /Gem & ny/i }));
+
+    // Modalen bliver åben og felterne ryddet, så man kan taste den næste.
+    await waitFor(() => expect((screen.getByLabelText(/Beløb/) as HTMLInputElement).value).toBe(''));
+
+    fireEvent.change(screen.getByLabelText(/Beløb/), { target: { value: '30' } });
+    fireEvent.change(screen.getByPlaceholderText('Fx Netto'), { target: { value: 'Bageren' } });
+    fireEvent.click(screen.getByRole('button', { name: /Gem udgift/i }));
+
+    await waitFor(() => expect(screen.queryByRole('button', { name: /Gem udgift/i })).toBeNull());
+    const transactions = storedState().transactions as Array<{ merchant: string }>;
+    expect(transactions.map((txn) => txn.merchant)).toEqual(expect.arrayContaining(['Kiosken', 'Bageren']));
+  });
+
+  it('kan sætte datoen til i går med ét tryk', () => {
+    render(<App />);
+    skipOnboarding();
+    fireEvent.click(screen.getAllByRole('button', { name: /Ny udgift/i })[0]);
+    fireEvent.click(screen.getByRole('button', { name: 'I går' }));
+    const date = screen.getByLabelText('Dato') as HTMLInputElement;
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    expect(date.value).toBe(yesterday.toISOString().slice(0, 10));
+  });
+
+  it('viser backup-status i indstillinger', () => {
+    render(<App />);
+    skipOnboarding();
+    fireEvent.click(screen.getAllByRole('button', { name: /Indstillinger/i })[0]);
+    expect(screen.getByText(/Ingen backup endnu|Sidste backup/i)).toBeTruthy();
   });
 
   it('kan søge i alle måneder', () => {

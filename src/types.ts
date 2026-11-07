@@ -64,6 +64,8 @@ export interface Settings {
   theme: 'system' | 'light' | 'dark';
   currency: 'DKK' | 'EUR' | 'SEK' | 'NOK';
   onboarded: boolean;
+  /** ISO-tidsstempel for seneste backup — bruges til at minde om en ny. */
+  lastBackupAt?: string;
 }
 
 export interface AppState {
